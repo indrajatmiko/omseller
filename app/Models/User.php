@@ -5,14 +5,13 @@ namespace App\Models;
 use Illuminate\Support\Str;
 use Wave\User as WaveUser;
 use Illuminate\Foundation\Auth\User as Authenticatable;
-use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Notifications\Notifiable;
 use Wave\Traits\HasProfileKeyValues;
 use App\Models\KalkulatorShopee;
 
 class User extends WaveUser
 {
-    use Notifiable, HasProfileKeyValues, HasApiTokens;
+    use Notifiable, HasProfileKeyValues;
 
     public $guard_name = 'web';
 
