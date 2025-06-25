@@ -29,6 +29,9 @@ Route::middleware('auth:api')->group(function () {
     // (Baru) Rute Scraper Produk
     Route::post('/products/scrape', [App\Http\Controllers\Api\ProductScrapeController::class, 'store']);
     Route::get('/products/stats', [App\Http\Controllers\Api\ProductScrapeController::class, 'getStats']);
+
+    // (BARU) Rute Scraper Pesanan
+    Route::post('/orders/scrape', [App\Http\Controllers\Api\OrderScrapeController::class, 'store']);
 });
 
 Wave::api();
