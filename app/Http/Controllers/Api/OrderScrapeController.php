@@ -37,44 +37,55 @@ class OrderScrapeController extends Controller
         DB::beginTransaction();
         try {
             foreach ($request->orders as $orderData) {
-                $order = Order::updateOrCreate(
-                    [
-                        'user_id' => $user->id,
-                        'shopee_order_id' => $orderData['shopee_order_id'],
-                    ],
-                    [
-                        'order_sn' => $orderData['order_sn'],
-                        'buyer_username' => $orderData['buyer_username'] ?? null,
-                        'total_price' => $orderData['total_price'],
-                        'payment_method' => $orderData['payment_method'] ?? null,
-                        'order_status' => $orderData['order_status'] ?? null,
-                        'status_description' => $orderData['status_description'] ?? null,
-                        'shipping_provider' => $orderData['shipping_provider'] ?? null,
-                        'tracking_number' => $orderData['tracking_number'] ?? null,
-                        'order_detail_url' => $orderData['order_detail_url'],
-                        'scraped_at' => now(),
-                    ]
-                );
+                // Kunci unik untuk mencari pesanan yang ada
+                $uniqueAttributes = [
+                    'user_id' => $user->id,
+                    'shopee_order_id' => $orderData['shopee_order_id'],
+                ];
+                
+                // Nilai yang akan dibuat atau diperbarui
+                $values = [
+                    'order_sn' => $orderData['order_sn'],
+                    'buyer_username' => $orderData['buyer_username'] ?? null,
+                    'total_price' => $orderData['total_price'],
+                    'payment_method' => $orderData['payment_method'] ?? null,
+                    'order_status' => $orderData['order_status'] ?? null,
+                    'status_description' => $orderData['status_description'] ?? null,
+                    'shipping_provider' => $orderData['shipping_provider'] ?? null,
+                    'tracking_number' => $orderData['tracking_number'] ?? null,
+                    'order_detail_url' => $orderData['order_detail_url'],
+                    'scraped_at' => now(),
+                ];
+
+                // Menggunakan updateOrCreate dengan benar
+                $order = Order::updateOrCreate($uniqueAttributes, $values);
 
                 if ($order->wasRecentlyCreated) {
                     $ordersCreated++;
                 } else {
                     $ordersUpdated++;
-                    // Hapus item lama untuk memastikan data sinkron
+                    // Jika pesanan sudah ada, hapus item lama untuk sinkronisasi ulang
                     $order->items()->delete();
                 }
 
                 // Tambahkan item baru
                 $itemsToCreate = [];
                 foreach ($orderData['items'] as $itemData) {
-                    $itemsToCreate[] = [
-                        'product_name' => $itemData['product_name'],
-                        'variant_description' => $itemData['variant_description'] ?? null,
-                        'quantity' => $itemData['quantity'],
-                        'image_url' => $itemData['image_url'] ?? null,
-                    ];
+                    // Pastikan data item valid sebelum ditambahkan
+                    if (!empty($itemData['product_name'])) {
+                        $itemsToCreate[] = [
+                            'product_name' => $itemData['product_name'],
+                            'variant_description' => $itemData['variant_description'] ?? null,
+                            'quantity' => $itemData['quantity'],
+                            'image_url' => $itemData['image_url'] ?? null,
+                        ];
+                    }
                 }
-                $order->items()->createMany($itemsToCreate);
+                
+                // Hanya buat item jika ada data yang valid
+                if (!empty($itemsToCreate)) {
+                    $order->items()->createMany($itemsToCreate);
+                }
             }
 
             DB::commit();
