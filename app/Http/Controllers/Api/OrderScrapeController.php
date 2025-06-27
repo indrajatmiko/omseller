@@ -21,13 +21,17 @@ class OrderScrapeController extends Controller
             'orders' => 'required|array|min:1',
             'orders.*.shopee_order_id' => 'required|string',
             
-            // Validasi payment_details sebagai array dari objek
-            'orders.*.payment_details' => 'sometimes|array|max:1', // Pastikan hanya ada maks 1 elemen
+            'orders.*.payment_details' => 'sometimes|array|max:1',
+            // Pastikan SEMUA kunci yang mungkin dikirim dari logic.js ada di sini
             'orders.*.payment_details.*.product_subtotal' => 'nullable|numeric',
+            'orders.*.payment_details.*.shipping_fee_paid_by_buyer' => 'nullable|numeric',
+            'orders.*.payment_details.*.shipping_fee_paid_to_logistic' => 'nullable|numeric',
+            'orders.*.payment_details.*.shopee_shipping_subsidy' => 'nullable|numeric',
             'orders.*.payment_details.*.admin_fee' => 'nullable|numeric',
             'orders.*.payment_details.*.service_fee' => 'nullable|numeric',
+            'orders.*.payment_details.*.coins_spent_by_buyer' => 'nullable|numeric',
+            'orders.*.payment_details.*.seller_voucher' => 'nullable|numeric',
             'orders.*.payment_details.*.total_income' => 'nullable|numeric',
-            // Tambahkan kunci lain yang perlu divalidasi di sini
             
             'orders.*.histories' => 'sometimes|array',
             'orders.*.histories.*.status' => 'required_with:orders.*.histories|string',
