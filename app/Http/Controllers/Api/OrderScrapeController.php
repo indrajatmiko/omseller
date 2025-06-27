@@ -85,8 +85,12 @@ class OrderScrapeController extends Controller
                 }
 
                 if (isset($orderData['payment_details'])) {
-                    $order->paymentDetails()->delete();
-                    $order->paymentDetails()->createMany($orderData['payment_details']);
+                    // Gunakan updateOrCreate untuk menyederhanakan.
+                    // Ini akan memperbarui jika ada, atau membuat jika tidak ada.
+                    $order->paymentDetails()->updateOrCreate(
+                        ['order_id' => $order->id], // Kunci untuk mencari
+                        $orderData['payment_details'] // Data untuk diisi
+                    );
                 }
 
                 if (isset($orderData['histories'])) {

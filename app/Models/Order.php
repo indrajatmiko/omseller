@@ -43,9 +43,9 @@ class Order extends Model
     // (BARU) Relasi ke tabel baru
     public function paymentDetails()
     {
-        return $this->hasMany(OrderPaymentDetail::class);
+        return $this->hasOne(OrderPaymentDetail::class);
     }
-
+    
     public function histories()
     {
         return $this->hasMany(OrderHistory::class);
