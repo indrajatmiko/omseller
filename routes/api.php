@@ -32,6 +32,9 @@ Route::middleware('auth:api')->group(function () {
 
     // (BARU) Rute Scraper Pesanan
     Route::post('/orders/scrape', [App\Http\Controllers\Api\OrderScrapeController::class, 'store']);
+
+    Route::get('/orders/pending-details', [App\Http\Controllers\Api\OrderScrapeController::class, 'getPendingDetails']);
+
 });
 
 Wave::api();

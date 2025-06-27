@@ -124,4 +124,29 @@ class OrderScrapeController extends Controller
             return response()->json(['message' => 'Kesalahan internal server: ' . $e->getMessage()], 500);
         }
     }
+
+    public function getPendingDetails(Request $request)
+    {
+        $user = Auth::user();
+
+        $pendingOrders = Order::where('user_id', $user->id)
+            // Menggunakan 'whereDoesntHave' untuk menemukan pesanan yang TIDAK memiliki relasi 'paymentDetails'
+            ->whereDoesntHave('paymentDetails')
+            // Hanya ambil kolom yang kita butuhkan untuk mengurangi ukuran payload
+            ->select('shopee_order_id', 'order_detail_url')
+            ->orderBy('created_at', 'asc') // Proses dari yang paling lama
+            ->limit(100) // Batasi jumlah untuk menghindari timeout (bisa disesuaikan)
+            ->get();
+            
+        // Ubah format agar cocok dengan apa yang diharapkan oleh loader.js
+        $formattedOrders = $pendingOrders->map(function ($order) {
+            return [
+                'shopee_order_id' => $order->shopee_order_id,
+                'url' => $order->order_detail_url,
+            ];
+        });
+
+        return response()->json($formattedOrders);
+    }
+
 }
