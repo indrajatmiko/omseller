@@ -90,12 +90,14 @@ class OrderScrapeController extends Controller
                     $order->items()->createMany($orderData['items']);
                 }
 
-                if (isset($orderData['payment_details'])) {
+                if (isset($orderData['payment_details']) && !empty($orderData['payment_details'])) {
+                    // Ambil objek pertama dari array
+                    $paymentData = $orderData['payment_details'][0];
+                    
                     // Gunakan updateOrCreate untuk menyederhanakan.
-                    // Ini akan memperbarui jika ada, atau membuat jika tidak ada.
                     $order->paymentDetails()->updateOrCreate(
                         ['order_id' => $order->id], // Kunci untuk mencari
-                        $orderData['payment_details'] // Data untuk diisi
+                        $paymentData // Data untuk diisi (sekarang objek datar)
                     );
                 }
 
