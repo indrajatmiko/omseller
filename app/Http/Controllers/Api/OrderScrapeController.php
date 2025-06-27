@@ -19,9 +19,15 @@ class OrderScrapeController extends Controller
         $validator = Validator::make($request->all(), [
             'orders' => 'required|array|min:1',
             'orders.*.shopee_order_id' => 'required|string',
-            'orders.*.payment_details' => 'sometimes|array',
-            'orders.*.payment_details.*.label' => 'required_with:orders.*.payment_details|string',
-            'orders.*.payment_details.*.amount' => 'required_with:orders.*.payment_details|numeric',
+            // Validasi untuk payment_details sebagai objek, bukan array
+            'orders.*.payment_details' => 'sometimes|array', // 'array' di Laravel juga memvalidasi objek asosiatif
+            'orders.*.payment_details.product_subtotal' => 'nullable|numeric',
+            'orders.*.payment_details.shipping_fee_paid_by_buyer' => 'nullable|numeric',
+            'orders.*.payment_details.admin_fee' => 'nullable|numeric',
+            // Tambahkan validasi lain untuk kunci yang ada di objek payment_details
+            'orders.*.payment_details.service_fee' => 'nullable|numeric',
+            'orders.*.payment_details.total_income' => 'nullable|numeric',
+            
             'orders.*.histories' => 'sometimes|array',
             'orders.*.histories.*.status' => 'required_with:orders.*.histories|string',
             'orders.*.histories.*.event_time' => 'sometimes|date_format:d/m/Y H:i',
