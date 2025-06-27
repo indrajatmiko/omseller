@@ -51,6 +51,7 @@ class OrderScrapeController extends Controller
             
             'orders.*.histories' => 'sometimes|array',
             'orders.*.histories.*.status' => 'required_with:orders.*.histories|string',
+            'orders.*.histories.*.description' => 'sometimes|string|nullable',
             'orders.*.histories.*.event_time' => 'sometimes|date_format:d/m/Y H:i',
         ]);
 
