@@ -16,17 +16,18 @@ class OrderScrapeController extends Controller
 {
     public function store(Request $request)
     {
+        // --- PERBAIKAN UTAMA: Perbaiki aturan validasi ---
         $validator = Validator::make($request->all(), [
             'orders' => 'required|array|min:1',
             'orders.*.shopee_order_id' => 'required|string',
-            // Validasi untuk payment_details sebagai objek, bukan array
-            'orders.*.payment_details' => 'sometimes|array', // 'array' di Laravel juga memvalidasi objek asosiatif
-            'orders.*.payment_details.product_subtotal' => 'nullable|numeric',
-            'orders.*.payment_details.shipping_fee_paid_by_buyer' => 'nullable|numeric',
-            'orders.*.payment_details.admin_fee' => 'nullable|numeric',
-            // Tambahkan validasi lain untuk kunci yang ada di objek payment_details
-            'orders.*.payment_details.service_fee' => 'nullable|numeric',
-            'orders.*.payment_details.total_income' => 'nullable|numeric',
+            
+            // Validasi payment_details sebagai array dari objek
+            'orders.*.payment_details' => 'sometimes|array|max:1', // Pastikan hanya ada maks 1 elemen
+            'orders.*.payment_details.*.product_subtotal' => 'nullable|numeric',
+            'orders.*.payment_details.*.admin_fee' => 'nullable|numeric',
+            'orders.*.payment_details.*.service_fee' => 'nullable|numeric',
+            'orders.*.payment_details.*.total_income' => 'nullable|numeric',
+            // Tambahkan kunci lain yang perlu divalidasi di sini
             
             'orders.*.histories' => 'sometimes|array',
             'orders.*.histories.*.status' => 'required_with:orders.*.histories|string',
@@ -37,46 +38,35 @@ class OrderScrapeController extends Controller
             return response()->json(['message' => 'Data tidak valid.', 'errors' => $validator->errors()], 422);
         }
 
+        // --- AMBIL DATA YANG SUDAH DIVALIDASI ---
+        $validatedData = $validator->validated();
         $user = Auth::user();
         $ordersCreated = 0;
         $ordersUpdated = 0;
 
         DB::beginTransaction();
         try {
-            foreach ($request->orders as $orderData) {
-                // --- PERBAIKAN UTAMA DI SINI ---
-                
-                // 1. Cari dulu Order yang ada berdasarkan atribut unik.
+            // Gunakan $validatedData['orders'] untuk memastikan hanya data bersih yang diproses
+            foreach ($validatedData['orders'] as $orderData) {
                 $order = Order::firstOrNew([
                     'user_id' => $user->id,
                     'shopee_order_id' => $orderData['shopee_order_id'],
                 ]);
-                
-                // 2. Cek apakah order ini baru atau sudah ada.
+
                 $wasRecentlyCreated = !$order->exists;
                 
-                // 3. Kumpulkan semua data yang mungkin untuk di-update atau di-create.
-                $orderValues = [
-                    'order_sn'           => $orderData['order_sn'] ?? $order->order_sn,
-                    'buyer_username'     => $orderData['buyer_username'] ?? $order->buyer_username,
-                    'total_price'        => $orderData['total_price'] ?? $order->total_price,
-                    'payment_method'     => $orderData['payment_method'] ?? $order->payment_method,
-                    'order_status'       => $orderData['order_status'] ?? $order->order_status,
-                    'status_description' => $orderData['status_description'] ?? $order->status_description,
-                    'shipping_provider'  => $orderData['shipping_provider'] ?? $order->shipping_provider,
-                    'tracking_number'    => $orderData['tracking_number'] ?? $order->tracking_number,
-                    'order_detail_url'   => $orderData['order_detail_url'] ?? $order->order_detail_url,
-                    'address_full'       => $orderData['address_full'] ?? $order->address_full,
-                    'final_income'       => $orderData['final_income'] ?? $order->final_income,
-                    'scraped_at'         => now(),
-                ];
+                // Kumpulkan data order utama, tidak termasuk relasi
+                $orderValues = collect($orderData)->except(['items', 'payment_details', 'histories'])->all();
+                
+                // Gabungkan dengan nilai yang sudah ada jika ini adalah update
+                if (!$wasRecentlyCreated) {
+                    $orderValues = array_merge($order->getAttributes(), $orderValues);
+                }
+                $orderValues['scraped_at'] = now();
 
-                // 4. Isi model dengan nilai baru dan simpan.
                 $order->fill($orderValues);
                 $order->save();
                 
-                // ------------------------------------
-
                 if ($wasRecentlyCreated) {
                     $ordersCreated++;
                 } else {
@@ -90,14 +80,14 @@ class OrderScrapeController extends Controller
                     $order->items()->createMany($orderData['items']);
                 }
 
+                // --- PERBAIKAN UTAMA: Logika penyimpanan ---
                 if (isset($orderData['payment_details']) && !empty($orderData['payment_details'])) {
-                    // Ambil objek pertama dari array
                     $paymentData = $orderData['payment_details'][0];
                     
-                    // Gunakan updateOrCreate untuk menyederhanakan.
+                    // Gunakan updateOrCreate pada relasi hasOne
                     $order->paymentDetails()->updateOrCreate(
-                        ['order_id' => $order->id], // Kunci untuk mencari
-                        $paymentData // Data untuk diisi (sekarang objek datar)
+                        ['order_id' => $order->id],
+                        $paymentData
                     );
                 }
 
@@ -105,7 +95,11 @@ class OrderScrapeController extends Controller
                     $order->histories()->delete();
                     $historiesToCreate = array_map(function ($history) {
                         if (isset($history['event_time'])) {
-                            $history['event_time'] = Carbon::createFromFormat('d/m/Y H:i', $history['event_time']);
+                            try {
+                                $history['event_time'] = Carbon::createFromFormat('d/m/Y H:i', $history['event_time']);
+                            } catch (\Exception $e) {
+                                $history['event_time'] = now(); // Fallback jika format salah
+                            }
                         }
                         return $history;
                     }, $orderData['histories']);
@@ -127,7 +121,7 @@ class OrderScrapeController extends Controller
                 'message' => $e->getMessage(),
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
-                'request' => $request->all() // Log request untuk debugging
+                'request' => $request->all()
             ]);
             return response()->json(['message' => 'Kesalahan internal server: ' . $e->getMessage()], 500);
         }
