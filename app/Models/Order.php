@@ -22,6 +22,8 @@ class Order extends Model
         'tracking_number',
         'order_detail_url',
         'scraped_at',
+        'address_full',
+        'final_income', // Kolom baru ditambahkan
     ];
     
     protected $casts = [
@@ -36,5 +38,16 @@ class Order extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    // (BARU) Relasi ke tabel baru
+    public function paymentDetails()
+    {
+        return $this->hasMany(OrderPaymentDetail::class);
+    }
+
+    public function histories()
+    {
+        return $this->hasMany(OrderHistory::class);
     }
 }
