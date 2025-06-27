@@ -22,6 +22,22 @@ class OrderScrapeController extends Controller
         $validator = Validator::make($request->all(), [
             'orders' => 'required|array|min:1',
             'orders.*.shopee_order_id' => 'required|string',
+            
+            // Aturan untuk data dasar (dari scrape daftar pesanan)
+            'orders.*.order_sn' => 'sometimes|string|nullable',
+            'orders.*.buyer_username' => 'sometimes|string|nullable',
+            'orders.*.total_price' => 'sometimes|numeric|nullable',
+            'orders.*.payment_method' => 'sometimes|string|nullable',
+            'orders.*.order_status' => 'sometimes|string|nullable',
+            'orders.*.status_description' => 'sometimes|string|nullable',
+            'orders.*.shipping_provider' => 'sometimes|string|nullable',
+            'orders.*.tracking_number' => 'sometimes|string|nullable',
+            'orders.*.order_detail_url' => 'sometimes|url|nullable',
+            'orders.*.address_full' => 'sometimes|string|nullable',
+            'orders.*.final_income' => 'sometimes|numeric|nullable',
+            'orders.*.items' => 'sometimes|array',
+
+            // Aturan untuk data relasional (dari scrape detail)
             'orders.*.payment_details' => 'sometimes|array|max:1',
             'orders.*.payment_details.*.product_subtotal' => 'nullable|numeric',
             'orders.*.payment_details.*.shipping_fee_paid_by_buyer' => 'nullable|numeric',
@@ -32,10 +48,12 @@ class OrderScrapeController extends Controller
             'orders.*.payment_details.*.coins_spent_by_buyer' => 'nullable|numeric',
             'orders.*.payment_details.*.seller_voucher' => 'nullable|numeric',
             'orders.*.payment_details.*.total_income' => 'nullable|numeric',
+            
             'orders.*.histories' => 'sometimes|array',
             'orders.*.histories.*.status' => 'required_with:orders.*.histories|string',
             'orders.*.histories.*.event_time' => 'sometimes|date_format:d/m/Y H:i',
         ]);
+
 
         if ($validator->fails()) {
             // --- LOG 2: Log jika validasi gagal ---
