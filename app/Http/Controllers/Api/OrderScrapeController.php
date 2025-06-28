@@ -33,9 +33,13 @@ class OrderScrapeController extends Controller
             'orders.*.payment_details.*.coins_spent_by_buyer' => 'nullable|numeric',
             'orders.*.payment_details.*.total_income' => 'nullable|numeric',
             'orders.*.payment_details.*.seller_voucher' => 'nullable|numeric',
-            'orders.*.payment_details.*.shop_voucher' => 'nullable|numeric',
-            'orders.*.payment_details.*.ams_commission_fee' => 'nullable|numeric', // Validasi baru
             
+            'orders.*.payment_details.*.shipping_fee_subtotal' => 'nullable|numeric',
+            'orders.*.payment_details.*.shipping_fee_estimate' => 'nullable|numeric',
+            'orders.*.payment_details.*.other_fees' => 'nullable|numeric',
+            'orders.*.payment_details.*.shop_voucher' => 'nullable|numeric',
+            'orders.*.payment_details.*.ams_commission_fee' => 'nullable|numeric',
+
             'orders.*.histories' => 'sometimes|array',
             'orders.*.histories.*.status' => 'required_with:orders.*.histories|string',
             'orders.*.histories.*.description' => 'sometimes|string|nullable',
