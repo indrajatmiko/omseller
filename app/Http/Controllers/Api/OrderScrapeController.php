@@ -105,13 +105,7 @@ class OrderScrapeController extends Controller
 
                 // --- PERBAIKAN UTAMA: Logika penyimpanan ---
                 if (isset($orderData['payment_details']) && !empty($orderData['payment_details'])) {
-                    $paymentData = $orderData['payment_details'][0];
-                    
-                    // Gunakan updateOrCreate pada relasi hasOne
-                    $order->paymentDetails()->updateOrCreate(
-                        ['order_id' => $order->id],
-                        $paymentData
-                    );
+                    $order->paymentDetails()->updateOrCreate(['order_id' => $order->id], $orderData['payment_details'][0]);
                 }
 
                 if (isset($orderData['histories'])) {
