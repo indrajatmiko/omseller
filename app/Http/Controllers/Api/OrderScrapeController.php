@@ -16,7 +16,7 @@ class OrderScrapeController extends Controller
 {
     public function store(Request $request)
     {
-        // Validasi yang diperbarui dengan kunci baru Anda
+        // --- PERBAIKAN UTAMA: Perbaiki aturan validasi ---
         $validator = Validator::make($request->all(), [
             'orders' => 'required|array|min:1',
             'orders.*.shopee_order_id' => 'required|string',
@@ -61,6 +61,7 @@ class OrderScrapeController extends Controller
             return response()->json(['message' => 'Data tidak valid.', 'errors' => $validator->errors()], 422);
         }
 
+        // --- AMBIL DATA YANG SUDAH DIVALIDASI ---
         $validatedData = $validator->validated();
         $user = Auth::user();
         $ordersCreated = 0;
@@ -68,71 +69,64 @@ class OrderScrapeController extends Controller
 
         DB::beginTransaction();
         try {
+            // Gunakan $validatedData['orders'] untuk memastikan hanya data bersih yang diproses
             foreach ($validatedData['orders'] as $orderData) {
                 $order = Order::firstOrNew([
-                    'user_id' => $user->id, 'shopee_order_id' => $orderData['shopee_order_id'],
+                    'user_id' => $user->id,
+                    'shopee_order_id' => $orderData['shopee_order_id'],
                 ]);
-                $wasRecentlyCreated = !$order->exists;
-                $orderValues = collect($orderData)->except(['items', 'payment_details', 'histories'])->all();
-                if (!$wasRecentlyCreated) $orderValues = array_merge($order->getAttributes(), $orderValues);
-                $orderValues['scraped_at'] = now();
-                $order->fill($orderValues)->save();
-                
-                if ($wasRecentlyCreated) $ordersCreated++; else $ordersUpdated++;
 
-                // Sinkronisasi Payment Details (tidak ada log di sini)
-                if (isset($orderData['payment_details']) && !empty($orderData['payment_details'])) {
-                    $order->paymentDetails()->updateOrCreate(['order_id' => $order->id], $orderData['payment_details'][0]);
+                $wasRecentlyCreated = !$order->exists;
+                
+                // Kumpulkan data order utama, tidak termasuk relasi
+                $orderValues = collect($orderData)->except(['items', 'payment_details', 'histories'])->all();
+                
+                // Gabungkan dengan nilai yang sudah ada jika ini adalah update
+                if (!$wasRecentlyCreated) {
+                    $orderValues = array_merge($order->getAttributes(), $orderValues);
+                }
+                $orderValues['scraped_at'] = now();
+
+                $order->fill($orderValues);
+                $order->save();
+                
+                if ($wasRecentlyCreated) {
+                    $ordersCreated++;
+                } else {
+                    $ordersUpdated++;
                 }
 
-                // --- LOGGING FOKUS PADA HISTORIES ---
-                if (isset($orderData['histories']) && !empty($orderData['histories'])) {
-                    Log::info("[HISTORY-DEBUG] Blok histories dimasuki untuk order #{$order->shopee_order_id}");
+                // Sinkronisasi Data Relasional
+                
+                if (isset($orderData['items'])) {
+                    $order->items()->delete();
+                    $order->items()->createMany($orderData['items']);
+                }
+
+                // --- PERBAIKAN UTAMA: Logika penyimpanan ---
+                if (isset($orderData['payment_details']) && !empty($orderData['payment_details'])) {
+                    $paymentData = $orderData['payment_details'][0];
                     
-                    // Hapus riwayat lama agar bisa diganti dengan yang baru
+                    // Gunakan updateOrCreate pada relasi hasOne
+                    $order->paymentDetails()->updateOrCreate(
+                        ['order_id' => $order->id],
+                        $paymentData
+                    );
+                }
+
+                if (isset($orderData['histories'])) {
                     $order->histories()->delete();
-                    Log::info("[HISTORY-DEBUG] Riwayat lama untuk order #{$order->shopee_order_id} telah dihapus.");
-                    
-                    $historiesToCreate = [];
-                    foreach($orderData['histories'] as $history) {
+                    $historiesToCreate = array_map(function ($history) {
                         if (isset($history['event_time'])) {
                             try {
-                                // Coba parse dengan format yang diharapkan
                                 $history['event_time'] = Carbon::createFromFormat('d/m/Y H:i', $history['event_time']);
-                                $historiesToCreate[] = $history;
                             } catch (\Exception $e) {
-                                // Jika gagal, log error dan coba parse tanpa format (lebih fleksibel)
-                                Log::warning("[HISTORY-DEBUG] Gagal parse tanggal dengan format d/m/Y H:i", [
-                                    'order_id' => $order->shopee_order_id,
-                                    'event_time_string' => $history['event_time'],
-                                    'error' => $e->getMessage()
-                                ]);
-                                try {
-                                    $history['event_time'] = Carbon::parse($history['event_time']);
-                                    $historiesToCreate[] = $history;
-                                } catch (\Exception $e2) {
-                                    // Jika masih gagal, log sebagai error fatal dan lewati item ini
-                                    Log::error("[HISTORY-DEBUG] Gagal total parse tanggal", [
-                                        'order_id' => $order->shopee_order_id,
-                                        'event_time_string' => $history['event_time'],
-                                        'error' => $e2->getMessage()
-                                    ]);
-                                }
+                                $history['event_time'] = now(); // Fallback jika format salah
                             }
                         }
-                    }
-                    
-                    Log::info("[HISTORY-DEBUG] Data histories yang SIAP untuk di-create", ['data' => $historiesToCreate]);
-                    
-                    if (!empty($historiesToCreate)) {
-                        $order->histories()->createMany($historiesToCreate);
-                        Log::info("[HISTORY-DEBUG] createMany untuk histories telah dieksekusi.");
-                    } else {
-                        Log::warning("[HISTORY-DEBUG] Tidak ada data history yang valid untuk dibuat setelah diproses.");
-                    }
-
-                } else {
-                    Log::info("[HISTORY-DEBUG] Blok histories DILEWATI untuk order #{$order->shopee_order_id} (tidak ada data atau kosong).");
+                        return $history;
+                    }, $orderData['histories']);
+                    $order->histories()->createMany($historiesToCreate);
                 }
             }
 
@@ -147,7 +141,9 @@ class OrderScrapeController extends Controller
         } catch (Throwable $e) {
             DB::rollBack();
             Log::error('Gagal menyimpan data pesanan untuk user ' . $user->id, [
-                'message' => $e->getMessage(), 'file' => $e->getFile(), 'line' => $e->getLine(),
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
                 'request' => $request->all()
             ]);
             return response()->json(['message' => 'Kesalahan internal server: ' . $e->getMessage()], 500);
