@@ -14,13 +14,13 @@ class CreateOrdersTable extends Migration
             $table->string('shopee_order_id')->unique();
             $table->string('order_sn');
             $table->string('buyer_username')->nullable();
-            $table->decimal('total_price', 15, 2);
+            $table->decimal('total_price', 15, 2)->nullable();
             $table->string('payment_method')->nullable();
             $table->string('order_status')->nullable();
             $table->text('status_description')->nullable();
             $table->string('shipping_provider')->nullable();
             $table->string('tracking_number')->nullable();
-            $table->text('order_detail_url');
+            $table->text('order_detail_url')->nullable();
             $table->timestamp('scraped_at')->useCurrent();
             $table->timestamps();
         });
