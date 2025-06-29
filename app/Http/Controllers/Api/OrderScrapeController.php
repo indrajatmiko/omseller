@@ -32,7 +32,13 @@ class OrderScrapeController extends Controller
             'orders.*.order_detail_url' => 'sometimes|url|nullable',
             'orders.*.address_full' => 'sometimes|string|nullable',
             'orders.*.final_income' => 'sometimes|numeric|nullable',
+            
             'orders.*.items' => 'sometimes|array',
+            'orders.*.items.*.product_name' => 'required_with:orders.*.items|string',
+            'orders.*.items.*.variant_sku' => 'nullable|string',
+            'orders.*.items.*.price' => 'required_with:orders.*.items|numeric',
+            'orders.*.items.*.quantity' => 'required_with:orders.*.items|integer',
+            'orders.*.items.*.subtotal' => 'required_with:orders.*.items|numeric',
 
             'orders.*.payment_details' => 'sometimes|array|max:1',
             'orders.*.payment_details.*.product_subtotal' => 'nullable|numeric',
@@ -121,6 +127,11 @@ class OrderScrapeController extends Controller
                         return $history;
                     }, $orderData['histories']);
                     $order->histories()->createMany($historiesToCreate);
+                }
+
+                if (isset($orderData['items']) && !empty($orderData['items'])) {
+                    $order->items()->delete();
+                    $order->items()->createMany($orderData['items']);
                 }
             }
 
