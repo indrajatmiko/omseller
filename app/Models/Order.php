@@ -50,4 +50,9 @@ class Order extends Model
     {
         return $this->hasMany(OrderHistory::class);
     }
+
+    public function statusHistories()
+    {
+        return $this->hasMany(OrderStatusHistory::class)->orderBy('scrape_time', 'desc');
+    }
 }

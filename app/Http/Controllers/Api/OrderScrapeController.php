@@ -16,11 +16,10 @@ class OrderScrapeController extends Controller
 {
     public function store(Request $request)
     {
-        // --- PERBAIKAN UTAMA: Perbaiki aturan validasi ---
+        // --- Validasi tidak berubah ---
         $validator = Validator::make($request->all(), [
             'orders' => 'required|array|min:1',
             'orders.*.shopee_order_id' => 'required|string',
-            // Aturan untuk data dasar (dari scrape daftar pesanan)
             'orders.*.order_sn' => 'sometimes|string|nullable',
             'orders.*.buyer_username' => 'sometimes|string|nullable',
             'orders.*.total_price' => 'sometimes|numeric|nullable',
@@ -32,14 +31,12 @@ class OrderScrapeController extends Controller
             'orders.*.order_detail_url' => 'sometimes|url|nullable',
             'orders.*.address_full' => 'sometimes|string|nullable',
             'orders.*.final_income' => 'sometimes|numeric|nullable',
-            
             'orders.*.items' => 'sometimes|array',
             'orders.*.items.*.product_name' => 'required_with:orders.*.items|string',
             'orders.*.items.*.variant_sku' => 'nullable|string',
             'orders.*.items.*.price' => 'required_with:orders.*.items|numeric',
             'orders.*.items.*.quantity' => 'required_with:orders.*.items|integer',
             'orders.*.items.*.subtotal' => 'required_with:orders.*.items|numeric',
-
             'orders.*.payment_details' => 'sometimes|array|max:1',
             'orders.*.payment_details.*.product_subtotal' => 'nullable|numeric',
             'orders.*.payment_details.*.shipping_fee_paid_by_buyer' => 'nullable|numeric',
@@ -50,24 +47,21 @@ class OrderScrapeController extends Controller
             'orders.*.payment_details.*.coins_spent_by_buyer' => 'nullable|numeric',
             'orders.*.payment_details.*.total_income' => 'nullable|numeric',
             'orders.*.payment_details.*.seller_voucher' => 'nullable|numeric',
-            
             'orders.*.payment_details.*.shipping_fee_subtotal' => 'nullable|numeric',
             'orders.*.payment_details.*.shipping_fee_estimate' => 'nullable|numeric',
             'orders.*.payment_details.*.other_fees' => 'nullable|numeric',
             'orders.*.payment_details.*.shop_voucher' => 'nullable|numeric',
             'orders.*.payment_details.*.ams_commission_fee' => 'nullable|numeric',
-
             'orders.*.histories' => 'sometimes|array',
             'orders.*.histories.*.status' => 'required_with:orders.*.histories|string',
             'orders.*.histories.*.description' => 'sometimes|string|nullable',
-            'orders.*.histories.*.event_time' => 'sometimes|string', // Ubah ke string untuk penanganan manual
+            'orders.*.histories.*.event_time' => 'sometimes|string',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['message' => 'Data tidak valid.', 'errors' => $validator->errors()], 422);
         }
 
-        // --- AMBIL DATA YANG SUDAH DIVALIDASI ---
         $validatedData = $validator->validated();
         $user = Auth::user();
         $ordersCreated = 0;
@@ -75,8 +69,12 @@ class OrderScrapeController extends Controller
 
         DB::beginTransaction();
         try {
-            // Gunakan $validatedData['orders'] untuk memastikan hanya data bersih yang diproses
             foreach ($validatedData['orders'] as $orderData) {
+                // ====================================================================
+                // ===             MODIFIKASI UTAMA DIMULAI DARI SINI             ===
+                // ====================================================================
+
+                // 1. Cari atau buat instance Order baru (sama seperti sebelumnya)
                 $order = Order::firstOrNew([
                     'user_id' => $user->id,
                     'shopee_order_id' => $orderData['shopee_order_id'],
@@ -84,32 +82,58 @@ class OrderScrapeController extends Controller
 
                 $wasRecentlyCreated = !$order->exists;
                 
-                // Kumpulkan data order utama, tidak termasuk relasi
-                $orderValues = collect($orderData)->except(['items', 'payment_details', 'histories'])->all();
-                
-                // Gabungkan dengan nilai yang sudah ada jika ini adalah update
-                if (!$wasRecentlyCreated) {
-                    $orderValues = array_merge($order->getAttributes(), $orderValues);
-                }
-                $orderValues['scraped_at'] = now();
+                // 2. Cek apakah status berubah SEBELUM di-fill dengan data baru
+                $statusHasChanged = !$wasRecentlyCreated &&
+                                    isset($orderData['order_status']) && 
+                                    $order->order_status !== $orderData['order_status'];
 
-                $order->fill($orderValues);
+                // 3. Langsung fill data utama. Ini lebih bersih daripada array_merge.
+                // Eloquent cukup pintar untuk hanya mengupdate kolom yang ada di $fillable
+                $order->fill($orderData);
+                $order->scraped_at = now(); // Selalu update timestamp
                 $order->save();
-                
+
+                // 4. Logika baru untuk mencatat riwayat status
+                if ($wasRecentlyCreated || $statusHasChanged) {
+                    if (isset($orderData['order_status'])) {
+                        $description = $orderData['status_description'] ?? null;
+                        $pickupTime = null;
+
+                        // Cek dan parse tanggal pickup jika ada
+                        if ($description && str_contains($description, 'Paket dipick up pada')) {
+                            preg_match('/(\d{2}\/\d{2}\/\d{4})/', $description, $matches);
+                            if (isset($matches[1])) {
+                                try {
+                                    $pickupTime = Carbon::createFromFormat('d/m/Y', $matches[1])->startOfDay();
+                                } catch (\Exception $e) {
+                                    Log::warning("Gagal mem-parsing tanggal pickup untuk order {$order->shopee_order_id}: {$matches[1]}");
+                                }
+                            }
+                        }
+
+                        // Buat entri baru di tabel riwayat status
+                        $order->statusHistories()->create([
+                            'status' => $orderData['order_status'],
+                            'description' => $description,
+                            'pickup_time' => $pickupTime,
+                            'scrape_time' => now(),
+                        ]);
+                    }
+                }
+
+                // Update counter (sama seperti sebelumnya)
                 if ($wasRecentlyCreated) {
                     $ordersCreated++;
                 } else {
                     $ordersUpdated++;
                 }
 
-                // Sinkronisasi Data Relasional
-                
-                if (isset($orderData['items'])) {
+                // 5. Sinkronisasi Data Relasional (sama seperti sebelumnya)
+                if (isset($orderData['items']) && !empty($orderData['items'])) {
                     $order->items()->delete();
                     $order->items()->createMany($orderData['items']);
                 }
 
-                // --- PERBAIKAN UTAMA: Logika penyimpanan ---
                 if (isset($orderData['payment_details']) && !empty($orderData['payment_details'])) {
                     $order->paymentDetails()->updateOrCreate(['order_id' => $order->id], $orderData['payment_details'][0]);
                 }
@@ -121,17 +145,12 @@ class OrderScrapeController extends Controller
                             try {
                                 $history['event_time'] = Carbon::createFromFormat('d/m/Y H:i', $history['event_time']);
                             } catch (\Exception $e) {
-                                $history['event_time'] = now(); // Fallback jika format salah
+                                $history['event_time'] = now();
                             }
                         }
                         return $history;
                     }, $orderData['histories']);
                     $order->histories()->createMany($historiesToCreate);
-                }
-
-                if (isset($orderData['items']) && !empty($orderData['items'])) {
-                    $order->items()->delete();
-                    $order->items()->createMany($orderData['items']);
                 }
             }
 
