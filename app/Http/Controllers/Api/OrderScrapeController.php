@@ -102,8 +102,19 @@ class OrderScrapeController extends Controller
                         $description = $orderData['status_description'] ?? null;
                         $pickupTime = null;
 
-                        // Parsing tanggal pickup dari deskripsi (logika lama, tetap berguna).
-                        if ($description && str_contains($description, 'Paket dipick up pada')) {
+                        // ====================================================================
+                        // ===            MODIFIKASI LOGIKA PENGISIAN PICKUP TIME           ===
+                        // ====================================================================
+                        
+                        // Prioritas 1: Cek perubahan status dari "Perlu Dikirim" ke "Sudah Kirim".
+                        // Ini berlaku untuk SEMUA jenis pengiriman.
+                        if (strtolower($oldStatus ?? '') === 'perlu dikirim' && strtolower($newStatus) === 'sudah kirim') {
+                            $pickupTime = now(); // Set pickup_time ke waktu saat perubahan dideteksi.
+                            Log::info("Pickup detected for order {$order->shopee_order_id} (Perlu Dikirim -> Sudah Kirim). Setting pickup_time to now.");
+                        
+                        // Prioritas 2: Jika tidak ada perubahan status di atas, coba parsing dari deskripsi.
+                        // Ini berguna untuk kasus di mana scrape pertama kali langsung melihat status "Sudah Kirim".
+                        } elseif ($description && str_contains($description, 'Paket dipick up pada')) {
                             preg_match('/(\d{2}\/\d{2}\/\d{4})/', $description, $matches);
                             if (isset($matches[1])) {
                                 try {
@@ -113,16 +124,11 @@ class OrderScrapeController extends Controller
                                 }
                             }
                         }
+
+                        // ====================================================================
+                        // ===                   AKHIR MODIFIKASI LOGIKA                    ===
+                        // ====================================================================
                         
-                        // Logika BARU & TANGGUH untuk Instan/Sameday.
-                        $shippingProvider = strtolower($orderData['shipping_provider'] ?? '');
-                        $isInstantOrSameDay = str_contains($shippingProvider, 'instan') || str_contains($shippingProvider, 'same day') || str_contains($shippingProvider, 'sameday');
-
-                        if ($isInstantOrSameDay && strtolower($oldStatus ?? '') === 'perlu dikirim' && strtolower($newStatus) === 'sudah kirim') {
-                            $pickupTime = now();
-                            Log::info("Instant/SameDay pickup detected for order {$order->shopee_order_id}. Setting pickup_time to now.");
-                        }
-
                         // Buat entri baru di tabel riwayat status.
                         $order->statusHistories()->create([
                             'status' => $newStatus,
