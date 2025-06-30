@@ -117,22 +117,26 @@ class OrderScrapeController extends Controller
                             }
                         }
 
-                        // 2. Logika BARU untuk jasa kirim Instan / Same Day
-                        $shippingProvider = strtolower($orderData['shipping_provider'] ?? '');
-                        $newStatus = $orderData['order_status'];
+                // === LOGIKA BARU YANG LEBIH TANGGUH ===
+                $shippingProvider = strtolower($orderData['shipping_provider'] ?? '');
+                $newStatus = $orderData['order_status'];
 
-                        $isInstantOrSameDay = str_contains($shippingProvider, 'instan') || str_contains($shippingProvider, 'same day') || str_contains($shippingProvider, 'sameday');
+                $isInstantOrSameDay = str_contains($shippingProvider, 'instan') || str_contains($shippingProvider, 'same day') || str_contains($shippingProvider, 'sameday');
 
-                        // Kondisi: jasa kirimnya instan/sameday DAN statusnya berubah dari "Perlu Dikirim" menjadi "Sudah Kirim"
-                        if ($isInstantOrSameDay && $oldStatus === 'Perlu Dikirim' && $newStatus === 'Sudah Kirim') {
-                            // Langsung isi pickup_time dengan waktu saat ini
-                            $pickupTime = now();
-                            Log::info("Instant/SameDay pickup detected for order {$order->shopee_order_id}. Setting pickup_time to now.");
-                        }
+                // Kondisi 1: Perubahan dari "Perlu Dikirim" -> "Sudah Kirim"
+                $condition1 = $isInstantOrSameDay && 
+                              strtolower($oldStatus ?? '') === 'perlu dikirim' && 
+                              strtolower($newStatus ?? '') === 'sudah kirim';
 
-                        // ====================================================================
-                        // ===                 AKHIR MODIFIKASI UTAMA                      ===
-                        // ====================================================================
+                // Kondisi 2: Pesanan baru dan langsung "Sudah Kirim" (misal: refresh cepat)
+                $condition2 = $isInstantOrSameDay && 
+                              $wasRecentlyCreated && 
+                              strtolower($newStatus ?? '') === 'sudah kirim';
+
+                if ($condition1 || $condition2) {
+                    $pickupTime = now();
+                    Log::info("Instant/SameDay pickup detected for order {$order->shopee_order_id}. Setting pickup_time to now. Condition triggered: " . ($condition1 ? '1' : '2'));
+                }
 
                         // Buat entri baru di tabel riwayat status
                         $order->statusHistories()->create([
