@@ -195,8 +195,10 @@ class OrderScrapeController extends Controller
     public function getPendingDetails(Request $request)
     {
         $user = Auth::user();
+        $statusesToExclude = ['Dibatalkan', 'Belum Bayar'];
 
         $pendingOrders = Order::where('user_id', $user->id)
+            ->whereNotIn('order_status', $statusesToExclude)
             // Menggunakan 'whereDoesntHave' untuk menemukan pesanan yang TIDAK memiliki relasi 'paymentDetails'
             ->where(function ($query) {
                 // Kriteria 1 (Lama): Pesanan yang TIDAK memiliki relasi 'paymentDetails'.
