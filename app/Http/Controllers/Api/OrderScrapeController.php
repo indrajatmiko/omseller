@@ -70,42 +70,39 @@ class OrderScrapeController extends Controller
         DB::beginTransaction();
         try {
             foreach ($validatedData['orders'] as $orderData) {
-                // ====================================================================
-                // ===             MODIFIKASI UTAMA DIMULAI DARI SINI             ===
-                // ====================================================================
-
-                // 1. Cari atau buat instance Order baru (sama seperti sebelumnya)
-                $order = Order::withCount('statusHistories')->firstOrNew([
+                // 1. Cari atau buat instance Order baru.
+                // Kita juga memuat relasi 'statusHistories' yang paling baru.
+                $order = Order::with(['statusHistories' => function ($query) {
+                    $query->latest('scrape_time')->limit(1);
+                }])->firstOrNew([
                     'user_id' => $user->id,
                     'shopee_order_id' => $orderData['shopee_order_id'],
                 ]);
 
                 $wasRecentlyCreated = !$order->exists;
+
+                // 2. Dapatkan status LAMA dari RIWAYAT, bukan dari tabel 'orders'.
+                $lastHistory = $order->statusHistories->first();
+                $oldStatus = $lastHistory ? $lastHistory->status : null;
                 
-                // 2. Cek apakah status berubah SEBELUM di-fill dengan data baru
-                $statusHasChanged = !$wasRecentlyCreated &&
-                    isset($orderData['order_status']) && 
-                    $order->order_status !== $orderData['order_status'];
-
-                $isOldOrderWithoutHistory = !$wasRecentlyCreated && $order->status_histories_count === 0;
-
-                // 3. Langsung fill data utama. Ini lebih bersih daripada array_merge.
-                // Eloquent cukup pintar untuk hanya mengupdate kolom yang ada di $fillable
+                // Dapatkan status BARU dari data scrape.
+                $newStatus = $orderData['order_status'] ?? null;
+                
+                // 3. Tentukan apakah statusnya benar-benar berubah.
+                $statusHasChanged = $oldStatus !== $newStatus;
+                
+                // 4. Update tabel 'orders' utama.
                 $order->fill($orderData);
-                $order->scraped_at = now(); // Selalu update timestamp
+                $order->scraped_at = now();
                 $order->save();
-
-                // 4. Logika baru untuk mencatat riwayat status
-                if ($wasRecentlyCreated || $statusHasChanged || $isOldOrderWithoutHistory) {
-                    if (isset($orderData['order_status'])) {
+                
+                // 5. Kondisi untuk mencatat riwayat: pesanan baru ATAU statusnya berubah.
+                if ($wasRecentlyCreated || $statusHasChanged) {
+                    if ($newStatus) { // Hanya catat jika ada status baru.
                         $description = $orderData['status_description'] ?? null;
                         $pickupTime = null;
 
-                        // ====================================================================
-                        // ===                MODIFIKASI UTAMA DIMULAI SINI                 ===
-                        // ====================================================================
-
-                        // 1. Parsing tanggal pickup dari deskripsi (untuk jasa kirim reguler)
+                        // Parsing tanggal pickup dari deskripsi (logika lama, tetap berguna).
                         if ($description && str_contains($description, 'Paket dipick up pada')) {
                             preg_match('/(\d{2}\/\d{2}\/\d{4})/', $description, $matches);
                             if (isset($matches[1])) {
@@ -116,31 +113,19 @@ class OrderScrapeController extends Controller
                                 }
                             }
                         }
+                        
+                        // Logika BARU & TANGGUH untuk Instan/Sameday.
+                        $shippingProvider = strtolower($orderData['shipping_provider'] ?? '');
+                        $isInstantOrSameDay = str_contains($shippingProvider, 'instan') || str_contains($shippingProvider, 'same day') || str_contains($shippingProvider, 'sameday');
 
-                // === LOGIKA BARU YANG LEBIH TANGGUH ===
-                $shippingProvider = strtolower($orderData['shipping_provider'] ?? '');
-                $newStatus = $orderData['order_status'];
+                        if ($isInstantOrSameDay && strtolower($oldStatus ?? '') === 'perlu dikirim' && strtolower($newStatus) === 'sudah kirim') {
+                            $pickupTime = now();
+                            Log::info("Instant/SameDay pickup detected for order {$order->shopee_order_id}. Setting pickup_time to now.");
+                        }
 
-                $isInstantOrSameDay = str_contains($shippingProvider, 'Instant') || str_contains($shippingProvider, 'Same Day') || str_contains($shippingProvider, 'Sameday');
-
-                // Kondisi 1: Perubahan dari "Perlu Dikirim" -> "Sudah Kirim"
-                $condition1 = $isInstantOrSameDay && 
-                              strtolower($oldStatus ?? '') === 'perlu dikirim' && 
-                              strtolower($newStatus ?? '') === 'sudah kirim';
-
-                // Kondisi 2: Pesanan baru dan langsung "Sudah Kirim" (misal: refresh cepat)
-                $condition2 = $isInstantOrSameDay && 
-                              $wasRecentlyCreated && 
-                              strtolower($newStatus ?? '') === 'sudah kirim';
-
-                if ($condition1 || $condition2) {
-                    $pickupTime = now();
-                    Log::info("Instant/SameDay pickup detected for order {$order->shopee_order_id}. Setting pickup_time to now. Condition triggered: " . ($condition1 ? '1' : '2'));
-                }
-
-                        // Buat entri baru di tabel riwayat status
+                        // Buat entri baru di tabel riwayat status.
                         $order->statusHistories()->create([
-                            'status' => $newStatus, // Gunakan variabel yang sudah didefinisikan
+                            'status' => $newStatus,
                             'description' => $description,
                             'pickup_time' => $pickupTime,
                             'scrape_time' => now(),
