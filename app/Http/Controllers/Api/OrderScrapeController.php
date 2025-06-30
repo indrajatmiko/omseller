@@ -121,7 +121,7 @@ class OrderScrapeController extends Controller
                 $shippingProvider = strtolower($orderData['shipping_provider'] ?? '');
                 $newStatus = $orderData['order_status'];
 
-                $isInstantOrSameDay = str_contains($shippingProvider, 'instan') || str_contains($shippingProvider, 'same day') || str_contains($shippingProvider, 'sameday');
+                $isInstantOrSameDay = str_contains($shippingProvider, 'Instant') || str_contains($shippingProvider, 'Same Day') || str_contains($shippingProvider, 'Sameday');
 
                 // Kondisi 1: Perubahan dari "Perlu Dikirim" -> "Sudah Kirim"
                 $condition1 = $isInstantOrSameDay && 
