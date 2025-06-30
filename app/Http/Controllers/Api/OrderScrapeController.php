@@ -75,7 +75,7 @@ class OrderScrapeController extends Controller
                 // ====================================================================
 
                 // 1. Cari atau buat instance Order baru (sama seperti sebelumnya)
-                $order = Order::firstOrNew([
+                $order = Order::withCount('statusHistories')->firstOrNew([
                     'user_id' => $user->id,
                     'shopee_order_id' => $orderData['shopee_order_id'],
                 ]);
@@ -84,8 +84,10 @@ class OrderScrapeController extends Controller
                 
                 // 2. Cek apakah status berubah SEBELUM di-fill dengan data baru
                 $statusHasChanged = !$wasRecentlyCreated &&
-                                    isset($orderData['order_status']) && 
-                                    $order->order_status !== $orderData['order_status'];
+                    isset($orderData['order_status']) && 
+                    $order->order_status !== $orderData['order_status'];
+
+                $isOldOrderWithoutHistory = !$wasRecentlyCreated && $order->status_histories_count === 0;
 
                 // 3. Langsung fill data utama. Ini lebih bersih daripada array_merge.
                 // Eloquent cukup pintar untuk hanya mengupdate kolom yang ada di $fillable
@@ -94,12 +96,11 @@ class OrderScrapeController extends Controller
                 $order->save();
 
                 // 4. Logika baru untuk mencatat riwayat status
-                if ($wasRecentlyCreated || $statusHasChanged) {
+                if ($wasRecentlyCreated || $statusHasChanged || $isOldOrderWithoutHistory) {
                     if (isset($orderData['order_status'])) {
                         $description = $orderData['status_description'] ?? null;
                         $pickupTime = null;
 
-                        // Cek dan parse tanggal pickup jika ada
                         if ($description && str_contains($description, 'Paket dipick up pada')) {
                             preg_match('/(\d{2}\/\d{2}\/\d{4})/', $description, $matches);
                             if (isset($matches[1])) {
