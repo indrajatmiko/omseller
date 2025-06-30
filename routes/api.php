@@ -34,7 +34,7 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/orders/scrape', [App\Http\Controllers\Api\OrderScrapeController::class, 'store']);
     Route::get('/orders/pending-details', [App\Http\Controllers\Api\OrderScrapeController::class, 'getPendingDetails']);
 
-    Route::post('/ads/transactions', [App\Http\Controllers\Api\AdsTransactionController::class, 'store']);
+    Route::post('/ad-transactions', [App\Http\Controllers\Api\AdTransactionController::class, 'store']);
     
 });
 
