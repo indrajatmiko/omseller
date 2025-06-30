@@ -198,11 +198,20 @@ class OrderScrapeController extends Controller
 
         $pendingOrders = Order::where('user_id', $user->id)
             // Menggunakan 'whereDoesntHave' untuk menemukan pesanan yang TIDAK memiliki relasi 'paymentDetails'
-            ->whereDoesntHave('paymentDetails')
+            ->where(function ($query) {
+                // Kriteria 1 (Lama): Pesanan yang TIDAK memiliki relasi 'paymentDetails'.
+                $query->whereDoesntHave('paymentDetails')
+                  
+                  // Kriteria 2 (BARU): ATAU pesanan yang alamatnya masih tersensor.
+                  ->orWhere('address_full', 'LIKE', '%***%')
+                  
+                  // Jaring pengaman tambahan untuk alamat yang masih NULL.
+                  ->orWhereNull('address_full');
+            })
             // Hanya ambil kolom yang kita butuhkan untuk mengurangi ukuran payload
             ->select('shopee_order_id', 'order_detail_url')
             ->orderBy('created_at', 'asc') // Proses dari yang paling lama
-            ->limit(100) // Batasi jumlah untuk menghindari timeout (bisa disesuaikan)
+            ->limit(25) // Batasi jumlah untuk menghindari timeout (bisa disesuaikan)
             ->get();
             
         // Ubah format agar cocok dengan apa yang diharapkan oleh loader.js
