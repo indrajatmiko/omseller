@@ -101,6 +101,11 @@ class OrderScrapeController extends Controller
                         $description = $orderData['status_description'] ?? null;
                         $pickupTime = null;
 
+                        // ====================================================================
+                        // ===                MODIFIKASI UTAMA DIMULAI SINI                 ===
+                        // ====================================================================
+
+                        // 1. Parsing tanggal pickup dari deskripsi (untuk jasa kirim reguler)
                         if ($description && str_contains($description, 'Paket dipick up pada')) {
                             preg_match('/(\d{2}\/\d{2}\/\d{4})/', $description, $matches);
                             if (isset($matches[1])) {
@@ -112,9 +117,26 @@ class OrderScrapeController extends Controller
                             }
                         }
 
+                        // 2. Logika BARU untuk jasa kirim Instan / Same Day
+                        $shippingProvider = strtolower($orderData['shipping_provider'] ?? '');
+                        $newStatus = $orderData['order_status'];
+
+                        $isInstantOrSameDay = str_contains($shippingProvider, 'instan') || str_contains($shippingProvider, 'same day') || str_contains($shippingProvider, 'sameday');
+
+                        // Kondisi: jasa kirimnya instan/sameday DAN statusnya berubah dari "Perlu Dikirim" menjadi "Sudah Kirim"
+                        if ($isInstantOrSameDay && $oldStatus === 'Perlu Dikirim' && $newStatus === 'Sudah Kirim') {
+                            // Langsung isi pickup_time dengan waktu saat ini
+                            $pickupTime = now();
+                            Log::info("Instant/SameDay pickup detected for order {$order->shopee_order_id}. Setting pickup_time to now.");
+                        }
+
+                        // ====================================================================
+                        // ===                 AKHIR MODIFIKASI UTAMA                      ===
+                        // ====================================================================
+
                         // Buat entri baru di tabel riwayat status
                         $order->statusHistories()->create([
-                            'status' => $orderData['order_status'],
+                            'status' => $newStatus, // Gunakan variabel yang sudah didefinisikan
                             'description' => $description,
                             'pickup_time' => $pickupTime,
                             'scrape_time' => now(),
