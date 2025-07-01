@@ -15,10 +15,9 @@ class AdTransactionController extends Controller
 {
     public function store(Request $request)
     {
-        // 1. Validasi Diperbarui: transaction_hash tidak lagi diperlukan
+        // Validasi tidak mengharapkan hash dari frontend
         $validator = Validator::make($request->all(), [
             'transactions' => 'required|array',
-            // 'transactions.*.hash' => 'required|string|max:64', // Dihapus
             'transactions.*.date' => 'required|string', // Format: dd/mm/yyyy
             'transactions.*.type' => 'required|string',
             'transactions.*.amount' => 'required|numeric',
@@ -30,66 +29,59 @@ class AdTransactionController extends Controller
 
         $user = Auth::user();
         $validated = $validator->validated();
-        
-        $transactionsToInsert = [];
-        $datesToProcess = []; // Array untuk menampung tanggal unik dari data yang masuk
+        $transactionsToUpsert = [];
         $now = now();
 
-        // 2. Memproses dan Mengumpulkan Data
-        // Loop ini mengumpulkan data yang akan disisipkan dan tanggal unik yang akan diproses.
-        foreach ($validated['transactions'] as $tx) {
+        // 1. Tetapkan batas waktu: Hanya proses data dari kemarin dan hari ini.
+        $cutoffDate = Carbon::yesterday()->startOfDay();
+
+        // 2. Proses data, filter tanggal, dan buat hash unik di backend.
+        // Kita menggunakan $index dari foreach untuk memastikan keunikan.
+        foreach ($validated['transactions'] as $index => $tx) {
             try {
                 $transactionDate = Carbon::createFromFormat('d/m/Y', $tx['date']);
 
-                // Kumpulkan tanggal dalam format Y-m-d untuk query penghapusan
-                $datesToProcess[] = $transactionDate->toDateString();
+                // Lewati data yang lebih lama dari kemarin.
+                if ($transactionDate->isBefore($cutoffDate)) {
+                    continue; 
+                }
 
-                // Siapkan data untuk disisipkan (tanpa hash)
-                $transactionsToInsert[] = [
+                // Buat hash unik di sisi server. Indeks sangat penting untuk duplikasi yang sah.
+                $hash = md5($user->id . '|' . $tx['date'] . '|' . $tx['type'] . '|' . $tx['amount'] . '|' . $index);
+                
+                // Siapkan data untuk operasi upsert
+                $transactionsToUpsert[] = [
                     'user_id' => $user->id,
+                    'transaction_hash' => $hash, // Hash yang dibuat di backend
                     'transaction_date' => $transactionDate->toDateString(),
                     'transaction_type' => $tx['type'],
                     'amount' => $tx['amount'],
                     'created_at' => $now,
                     'updated_at' => $now,
                 ];
+
             } catch (\Exception $e) {
                 Log::warning('Invalid date format for ad transaction', ['data' => $tx]);
                 continue;
             }
         }
 
-        if (empty($transactionsToInsert)) {
-            return response()->json(['message' => 'Tidak ada data valid untuk diproses.', 'inserted' => 0], 200);
+        if (empty($transactionsToUpsert)) {
+            return response()->json(['message' => 'Tidak ada data baru (kemarin & hari ini) untuk diproses.', 'processed' => 0], 200);
         }
-        
-        // Dapatkan tanggal unik untuk menghindari proses yang berlebihan
-        $uniqueDates = array_unique($datesToProcess);
 
-        // 3. Strategi "Delete-then-Insert" dalam satu Transaksi Atomik
-        try {
-            DB::transaction(function () use ($user, $uniqueDates, $transactionsToInsert) {
-                // HAPUS semua transaksi milik user ini PADA TANGGAL yang dikirimkan.
-                AdTransaction::where('user_id', $user->id)
-                    ->whereIn('transaction_date', $uniqueDates)
-                    ->delete();
-                
-                // SISIPKAN semua data baru yang sudah bersih.
-                // Menggunakan DB::table()->insert() lebih performan untuk bulk insert.
-                DB::table('ad_transactions')->insert($transactionsToInsert);
-            });
-        } catch (\Throwable $e) {
-            Log::error('Gagal sinkronisasi transaksi iklan untuk user ' . $user->id, [
-                'message' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-            ]);
-            return response()->json(['message' => 'Kesalahan database saat sinkronisasi: ' . $e->getMessage()], 500);
-        }
+        // 3. Gunakan "upsert" yang efisien.
+        // Ini akan menyisipkan record baru jika `transaction_hash` tidak ada,
+        // atau memperbarui record yang ada jika `transaction_hash` sudah ada.
+        $processedCount = AdTransaction::upsert(
+            $transactionsToUpsert,
+            ['user_id', 'transaction_hash'], // Kolom unik untuk dicek
+            ['transaction_date', 'transaction_type', 'amount', 'updated_at'] // Kolom yang diupdate jika sudah ada
+        );
 
         return response()->json([
             'message' => 'Data transaksi iklan berhasil disinkronkan.',
-            'inserted' => count($transactionsToInsert),
+            'processed' => $processedCount, // upsert mengembalikan jumlah record yang diproses (insert+update)
         ], 200);
     }
 
