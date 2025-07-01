@@ -35,7 +35,7 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/orders/pending-details', [App\Http\Controllers\Api\OrderScrapeController::class, 'getPendingDetails']);
 
     Route::post('/ad-transactions', [App\Http\Controllers\Api\AdTransactionController::class, 'store']);
-    
+    Route::get('/ad-transactions/latest-date', [App\Http\Controllers\Api\AdTransactionController::class, 'getLatestTransactionDate']);
 });
 
 Wave::api();

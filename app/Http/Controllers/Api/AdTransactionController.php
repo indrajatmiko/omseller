@@ -69,4 +69,20 @@ class AdTransactionController extends Controller
             'inserted' => $insertedCount,
         ], 200);
     }
+
+    /**
+     * (BARU) Mengambil tanggal transaksi terakhir yang tercatat untuk user.
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getLatestTransactionDate()
+    {
+        $user = Auth::user();
+
+        $latestDate = AdTransaction::where('user_id', $user->id)
+            ->max('transaction_date'); // Mengambil nilai maksimum (terbaru) dari kolom transaction_date
+
+        return response()->json([
+            'latest_date' => $latestDate // Akan mengembalikan 'YYYY-MM-DD' atau null
+        ]);
+    }
 }
