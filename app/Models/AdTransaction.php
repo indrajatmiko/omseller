@@ -9,9 +9,9 @@ class AdTransaction extends Model
 {
     use HasFactory;
 
+    // 'transaction_hash' dihapus dari daftar fillable.
     protected $fillable = [
         'user_id',
-        'transaction_hash',
         'transaction_date',
         'transaction_type',
         'amount',
