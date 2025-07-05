@@ -24,6 +24,7 @@ class Order extends Model
         'scraped_at',
         'address_full',
         'final_income', // Kolom baru ditambahkan
+        'buyer_name',
     ];
     
     protected $casts = [

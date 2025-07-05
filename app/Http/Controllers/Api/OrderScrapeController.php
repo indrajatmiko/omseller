@@ -29,6 +29,7 @@ class OrderScrapeController extends Controller
             'orders.*.shipping_provider' => 'sometimes|string|nullable',
             'orders.*.tracking_number' => 'sometimes|string|nullable',
             'orders.*.order_detail_url' => 'sometimes|url|nullable',
+            'orders.*.buyer_name' => 'sometimes|string|nullable',
             'orders.*.address_full' => 'sometimes|string|nullable',
             'orders.*.final_income' => 'sometimes|numeric|nullable',
             'orders.*.items' => 'sometimes|array',
