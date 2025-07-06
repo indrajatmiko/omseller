@@ -2,7 +2,7 @@
 
 use function Laravel\Folio\{middleware, name};
 use App\Models\Order;
-use App\Models\BuyerProfile; // <-- Tambahkan model baru
+use App\Models\BuyerProfile;
 use Livewire\Volt\Component;
 use Livewire\WithPagination;
 use Illuminate\Support\Str;
@@ -15,27 +15,25 @@ new class extends Component {
     use WithPagination;
 
     public array $buyerNames = [];
-    
-    // (BARU) Array untuk melacak profil mana yang sudah dikenal
-    public array $knownProfiles = []; 
+    public array $knownProfiles = [];
 
     public function mount(): void
     {
-        // 1. Ambil semua order hari ini
         $todaysOrders = Order::where('user_id', auth()->id())
             ->whereDate('created_at', today())
             ->get();
 
-        // 2. (EFISIEN) Buat daftar unik pembeli dari order hari ini
+        if ($todaysOrders->isEmpty()) {
+            return;
+        }
+
         $uniqueBuyers = $todaysOrders->map(function ($order) {
             return [
                 'buyer_username' => $order->buyer_username,
-                // Gunakan hash sha1 dari alamat sebagai identifier yang konsisten & pendek
-                'address_identifier' => sha1(trim($order->address_full)), 
+                'address_identifier' => sha1(trim($order->address_full)),
             ];
-        })->unique();
+        })->unique()->values();
 
-        // 3. (EFISIEN) Cek ke tabel `buyer_profiles` HANYA SEKALI untuk semua pembeli unik
         $knownBuyerProfiles = BuyerProfile::where('user_id', auth()->id())
             ->where(function ($query) use ($uniqueBuyers) {
                 foreach ($uniqueBuyers as $buyer) {
@@ -47,22 +45,18 @@ new class extends Component {
             })
             ->get();
         
-        // 4. (EFISIEN) Buat "peta" untuk pencarian cepat di memori (PHP)
         $profileMap = $knownBuyerProfiles->keyBy(function ($profile) {
             return $profile->buyer_username . '|' . $profile->address_identifier;
         });
 
-        // 5. Isi input `buyerNames` dan tandai mana yang sudah dikenal (`knownProfiles`)
         foreach ($todaysOrders as $order) {
             $identifierKey = $order->buyer_username . '|' . sha1(trim($order->address_full));
             
             if (isset($profileMap[$identifierKey])) {
-                // Jika profil ditemukan, isi nama dan tandai sebagai "dikenal"
                 $this->buyerNames[$order->id] = $profileMap[$identifierKey]->buyer_real_name;
                 $this->knownProfiles[$order->id] = true;
             } else {
-                // Jika tidak, biarkan kosong dan tandai sebagai "tidak dikenal"
-                $this->buyerNames[$order->id] = ''; // atau $order->buyer_name jika ada data lama
+                $this->buyerNames[$order->id] = $order->buyer_name ?? '';
                 $this->knownProfiles[$order->id] = false;
             }
         }
@@ -74,36 +68,33 @@ new class extends Component {
         $nameToSave = trim($this->buyerNames[$orderId] ?? '');
 
         if ($order && !empty($nameToSave)) {
-            // (BARU) Gunakan `updateOrCreate` untuk efisiensi maksimal!
-            // Ini akan membuat profil jika belum ada, atau mengupdate jika sudah ada.
             BuyerProfile::updateOrCreate(
                 [
-                    // Kunci untuk mencari
                     'user_id' => auth()->id(),
                     'buyer_username' => $order->buyer_username,
                     'address_identifier' => sha1(trim($order->address_full)),
                 ],
                 [
-                    // Data yang akan diisi/diupdate
                     'buyer_real_name' => $nameToSave,
                 ]
             );
 
-            // Simpan juga di order saat ini untuk konsistensi data
-            $order->update(['buyer_name' => $nameToSave]);
+            if ($order->buyer_name !== $nameToSave) {
+                 $order->update(['buyer_name' => $nameToSave]);
+            }
             
-            // Tandai profil ini sebagai "dikenal" di tampilan secara real-time
-            $this->knownProfiles[$orderId] = true; 
+            $this->knownProfiles[$orderId] = true;
         }
     }
 
     public function with(): array
     {
         return [
+            // Variabel 'orders' ini akan menjadi $orders di Blade
             'orders' => Order::where('user_id', auth()->id())
                 ->whereDate('created_at', today())
                 ->orderBy('created_at', 'desc')
-                ->paginate(10),
+                ->paginate(50),
         ];
     }
 }; ?>
@@ -118,7 +109,8 @@ new class extends Component {
                     :border="true" />
 
                 <div class="mt-6 space-y-3 sm:space-y-4">
-                    @forelse ($this->orders as $order)
+                    {{-- (DIUBAH) Menggunakan $orders, bukan $this->orders --}}
+                    @forelse ($orders as $order)
                         <div wire:key="order-{{ $order->id }}" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 transition-all duration-300">
                             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
                                 
@@ -143,15 +135,12 @@ new class extends Component {
                                         wire:model="buyerNames.{{ $order->id }}"
                                         wire:blur="saveBuyerName({{ $order->id }})"
                                         placeholder="Ketik nama pembeli di sini..."
-                                        {{-- (BARU) Kunci input jika profil sudah dikenal --}}
                                         @if($this->knownProfiles[$order->id] ?? false)
                                             disabled 
                                         @endif
                                         class="block w-full border rounded-lg shadow-sm focus:ring-opacity-50 transition-colors duration-200 bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-gray-100 placeholder-gray-400
-                                        {{-- Border merah untuk yang belum dikenal & kosong --}}
                                         @if(!($this->knownProfiles[$order->id] ?? false) && empty($this->buyerNames[$order->id]))
                                             border-red-400 dark:border-red-500 focus:border-red-500 dark:focus:border-red-500 focus:ring-red-500
-                                        {{-- Border abu-abu untuk yang sudah dikenal --}}
                                         @elseif($this->knownProfiles[$order->id] ?? false)
                                             border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 cursor-not-allowed
                                         @else
@@ -165,14 +154,15 @@ new class extends Component {
                         </div>
                     @empty
                         <div class="text-center py-16 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-dashed border-gray-300 dark:border-gray-700">
-                           <p>Tidak ada pesanan untuk hari ini.</p>
+                           <p class="text-gray-500">Tidak ada pesanan untuk hari ini.</p>
                         </div>
                     @endforelse
                 </div>
-
-                @if ($this->orders->hasPages())
+                
+                {{-- (DIUBAH) Menggunakan $orders, bukan $this->orders --}}
+                @if ($orders->hasPages())
                     <div class="mt-6">
-                        {{ $this->orders->links() }}
+                        {{ $orders->links() }}
                     </div>
                 @endif
 
