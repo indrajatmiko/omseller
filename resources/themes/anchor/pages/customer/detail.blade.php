@@ -85,6 +85,7 @@ new class extends Component {
             'last_order_details' => $lastOrder, 
             'days_since_last_order' => $lastOrder ? Carbon::parse($lastOrder->created_at)->diffForHumans() : 'N/A',
             'top_products' => $topProducts,
+            'username' => $buyerUsername,
         ];
     }
     
@@ -122,6 +123,7 @@ new class extends Component {
                 return (object) [
                     'identifier' => $profile->buyer_username . '|' . $profile->address_identifier,
                     'display_name' => $profile->buyer_real_name,
+                    'username' => $profile->buyer_username,
                     'is_provisional' => false,
                     'address' => Str::words(optional($lastOrder)->address_full ?? '', 6, '...'),
                     'last_order_date' => optional($lastOrder)->created_at
@@ -133,6 +135,7 @@ new class extends Component {
                 return (object) [
                     'identifier' => $key,
                     'display_name' => $order->buyer_username,
+                    'username' => $order->buyer_username,
                     'is_provisional' => true,
                     'address' => Str::words($order->address_full, 6, '...'),
                     'last_order_date' => $order->created_at,
@@ -160,6 +163,8 @@ new class extends Component {
                     return (object) [
                         'identifier' => $key,
                         'display_name' => $profile->buyer_real_name ?? $order->buyer_username,
+                        'buyer_username' => $order->buyer_username,
+                        'username' => $order->buyer_username,
                         'is_provisional' => is_null($profile),
                         'address' => Str::words($order->address_full, 6, '...'),
                         'last_order_date' => $order->created_at,
@@ -196,6 +201,17 @@ new class extends Component {
                                 <div>
                                     <h2 class="text-2xl font-bold text-gray-900 dark:text-gray-100">{{ $customerDetails['display_name'] }}</h2>
                                     
+                                    @if(!$customerDetails['is_provisional'])
+                                        {{-- BARU: Menggunakan flexbox untuk menyusun ikon dan teks --}}
+                                        <p class="mt-1 text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2">
+                                            {{-- BARU: Ikon/SVG untuk username --}}
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-500 mt-0.5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.986 5.986 0 0010 16a5.986 5.986 0 004.546-2.084A5 5 0 0010 11z" clip-rule="evenodd" />
+                                            </svg>
+                                            <span>{{ $customerDetails['username'] }}</span>
+                                        </p>
+                                    @endif
+
                                     {{-- BARU: Menampilkan alamat lengkap dari pesanan terakhir --}}
                                     @if($address = optional($customerDetails['last_order_details'])->address_full)
                                         <p class="mt-1 text-sm text-gray-600 dark:text-gray-400 flex items-start gap-2">
@@ -208,7 +224,7 @@ new class extends Component {
                                 </div>
 
                                 {{-- Tombol Kembali --}}
-                                <button wire:click="$set('selectedBuyerIdentifier', null)" class="text-sm font-semibold text-blue-600 hover:text-blue-800 whitespace-nowrap ml-4">← Kembali</button>
+                                <button wire:click="$set('selectedBuyerIdentifier', null)" class="flex-shrink-0 rounded-lg bg-black dark:bg-white px-3 py-2 text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors">< Kembali</button>
                             </div>
 
                             @if($customerDetails['is_provisional'])
@@ -246,7 +262,7 @@ new class extends Component {
                                     <ul class="space-y-2 text-sm">
                                         @foreach($order->items as $item)
                                         <li class="flex justify-between items-center">
-                                            <span class="text-gray-700 dark:text-gray-300">{{ $item->product_name }}</span>
+                                            <span class="text-gray-700 dark:text-gray-300">{{ Str::words($item->product_name ?? '', 6, '...') }}</span>
                                             <span class="font-mono bg-gray-200 dark:bg-gray-700 rounded px-2 py-1 text-xs font-bold">x{{ $item->quantity }}</span>
                                         </li>
                                         @endforeach
@@ -265,7 +281,7 @@ new class extends Component {
                                         <tbody>
                                             @forelse($customerDetails['top_products'] as $item)
                                             <tr class="bg-white dark:bg-gray-800 border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
-                                                <th scope="row" class="px-6 py-4 font-medium text-gray-900 dark:text-white">{{ $item->product_name }}</th>
+                                                <th scope="row" class="px-6 py-4 font-medium text-gray-900 dark:text-white">{{ Str::words($item->product_name ?? '', 6, '...') }}</th>
                                                 <td class="px-6 py-4">{{ $item->variant_sku ?: '-' }}</td>
                                                 <td class="px-6 py-4 text-right font-bold">{{ $item->total_quantity }}</td>
                                             </tr>
@@ -298,6 +314,12 @@ new class extends Component {
                                                 </p>
                                                 <span class="text-xs text-gray-500 dark:text-gray-400">{{ Carbon::parse($profile->last_order_date)->diffForHumans() }}</span>
                                             </div>
+                                            {{-- BARU: Tampilkan username jika profil tidak sementara --}}
+                                            @if(!$profile->is_provisional)
+                                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                                    @<span>{{ $profile->username }}</span>
+                                                </p>
+                                            @endif
                                             <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">{{ $profile->address }}</p>
                                         </div>
                                     @endforeach
