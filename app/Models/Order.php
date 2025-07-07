@@ -25,6 +25,7 @@ class Order extends Model
         'address_full',
         'final_income', // Kolom baru ditambahkan
         'buyer_name',
+        'is_stock_deducted',
     ];
     
     protected $casts = [
