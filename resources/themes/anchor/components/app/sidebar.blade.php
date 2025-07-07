@@ -55,6 +55,12 @@
                         <x-app.sidebar-link href="/datacenter-ikuti" icon="phosphor-storefront" :active="(Request::is('datacenter-ikuti'))">Tokopedia</x-app.sidebar-link>
                     </x-app.sidebar-dropdown>
                     
+                    <x-app.sidebar-dropdown text="Pelanggan" icon="phosphor-arrows-clockwise" id="pelangans_dropdown" :active="(Request::is('pelangans'))" :open="(Request::is('customer/name-update') || Request::is('customer/detail') || Request::is('customer/segmentation')) ? '1' : '0'">
+                        <x-app.sidebar-link href="/customer/name-update" icon="phosphor-package" :active="(Request::is('customer/name-update'))">Update Nama</x-app.sidebar-link>
+                        <x-app.sidebar-link href="/customer/detail" icon="phosphor-trolley-suitcase" :active="(Request::is('customer/detail'))">Database</x-app.sidebar-link>
+                        <x-app.sidebar-link href="/customer/segmentation" icon="phosphor-trolley-suitcase" :active="(Request::is('customer/segmentation'))">Segmentasi</x-app.sidebar-link>
+                    </x-app.sidebar-dropdown>
+                    
                     <x-app.sidebar-link onclick="event.preventDefault(); new FilamentNotification().title('Modify this button inside of sidebar.blade.php').send()" icon="phosphor-pencil-line" active="false">Produk - Hitung Margin</x-app.sidebar-link>
                     <x-app.sidebar-link  onclick="event.preventDefault(); new FilamentNotification().title('Modify this button inside of sidebar.blade.php').send()" icon="phosphor-users" active="false">Users</x-app.sidebar-link>
                 </div>
