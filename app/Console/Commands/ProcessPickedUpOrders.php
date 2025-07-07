@@ -8,35 +8,39 @@ use App\Models\ProductVariant;
 use App\Models\StockMovement;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Carbon\Carbon; // <-- Tambahkan ini
+use Carbon\Carbon;
 
 class ProcessPickedUpOrders extends Command
 {
     protected $signature = 'inventory:process-picked-up-orders';
-    protected $description = 'Process recent orders that have been picked up to deduct stock from inventory.';
+    protected $description = 'Process orders picked up TODAY to deduct stock from inventory.';
 
     public function handle()
     {
-        $this->info('Starting to process picked-up orders...');
+        $this->info('Starting to process orders picked up today...');
 
-        // BATASAN WAKTU: Hanya proses pesanan dengan pickup_time dalam 7 hari terakhir.
-        // Ini adalah jaring pengaman agar tidak memproses semua pesanan lama saat dijalankan pertama kali.
-        $cutOffDate = Carbon::now()->subDays(7)->startOfDay();
+        // Ambil tanggal hari ini.
+        $today = Carbon::today();
 
+        // Query untuk mencari Order yang memenuhi SEMUA kondisi berikut:
+        // 1. Stoknya belum dikurangi (is_stock_deducted = false).
+        // 2. Memiliki riwayat status (statusHistories).
+        // 3. Di dalam riwayat status tersebut, ada 'pickup_time' yang tidak null.
+        // 4. DAN 'pickup_time' tersebut berada pada tanggal hari ini (whereDate).
         $ordersToProcess = Order::where('is_stock_deducted', false)
-            ->whereHas('statusHistories', function ($query) use ($cutOffDate) {
+            ->whereHas('statusHistories', function ($query) use ($today) {
                 $query->whereNotNull('pickup_time')
-                      ->where('pickup_time', '>=', $cutOffDate); // <-- PERBAIKAN LOGIKA UTAMA
+                      ->whereDate('pickup_time', $today); // <-- PERBAIKAN UTAMA: Filter berdasarkan tanggal hari ini
             })
             ->with('items')
             ->get();
 
         if ($ordersToProcess->isEmpty()) {
-            $this->info('No new picked-up orders to process within the last 7 days.');
+            $this->info('No new orders picked up today to process.');
             return 0;
         }
 
-        $this->info("Found {$ordersToProcess->count()} orders to process.");
+        $this->info("Found {$ordersToProcess->count()} orders to process for today.");
 
         foreach ($ordersToProcess as $order) {
             try {
@@ -72,7 +76,7 @@ class ProcessPickedUpOrders extends Command
             }
         }
 
-        $this->info('Finished processing orders.');
+        $this->info('Finished processing orders for today.');
         return 0;
     }
 }
