@@ -8,26 +8,31 @@ use App\Models\ProductVariant;
 use App\Models\StockMovement;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Carbon\Carbon; // <-- Tambahkan ini
 
 class ProcessPickedUpOrders extends Command
 {
     protected $signature = 'inventory:process-picked-up-orders';
-    protected $description = 'Process orders that have been picked up to deduct stock from inventory.';
+    protected $description = 'Process recent orders that have been picked up to deduct stock from inventory.';
 
     public function handle()
     {
         $this->info('Starting to process picked-up orders...');
 
-        // Ambil semua order yang sudah di-pickup tapi stoknya belum dikurangi.
+        // BATASAN WAKTU: Hanya proses pesanan dengan pickup_time dalam 7 hari terakhir.
+        // Ini adalah jaring pengaman agar tidak memproses semua pesanan lama saat dijalankan pertama kali.
+        $cutOffDate = Carbon::now()->subDays(7)->startOfDay();
+
         $ordersToProcess = Order::where('is_stock_deducted', false)
-            ->whereHas('statusHistories', function ($query) {
-                $query->whereNotNull('pickup_time');
+            ->whereHas('statusHistories', function ($query) use ($cutOffDate) {
+                $query->whereNotNull('pickup_time')
+                      ->where('pickup_time', '>=', $cutOffDate); // <-- PERBAIKAN LOGIKA UTAMA
             })
-            ->with('items') // Eager load items untuk efisiensi
+            ->with('items')
             ->get();
 
         if ($ordersToProcess->isEmpty()) {
-            $this->info('No new picked-up orders to process.');
+            $this->info('No new picked-up orders to process within the last 7 days.');
             return 0;
         }
 
@@ -37,7 +42,6 @@ class ProcessPickedUpOrders extends Command
             try {
                 DB::transaction(function () use ($order) {
                     foreach ($order->items as $item) {
-                        // Cari variant berdasarkan SKU dan pastikan milik user yang sama
                         $variant = ProductVariant::where('variant_sku', $item->variant_sku)
                                                  ->whereHas('product', fn($q) => $q->where('user_id', $order->user_id))
                                                  ->first();
@@ -45,23 +49,20 @@ class ProcessPickedUpOrders extends Command
                         if ($variant) {
                             $quantityToDeduct = $item->quantity;
                             
-                            // 1. Kurangi stok gudang
                             $variant->decrement('warehouse_stock', $quantityToDeduct);
                             
-                            // 2. Buat catatan di buku besar (ledger)
                             StockMovement::create([
                                 'user_id' => $order->user_id,
                                 'product_variant_id' => $variant->id,
                                 'order_id' => $order->id,
                                 'type' => 'sale',
-                                'quantity' => -$quantityToDeduct, // Gunakan nilai negatif untuk penjualan
+                                'quantity' => -$quantityToDeduct,
                                 'notes' => 'Pengurangan otomatis dari Order SN: ' . $order->order_sn,
                             ]);
                         } else {
                             Log::warning("SKU not found for order item.", ['order_sn' => $order->order_sn, 'sku' => $item->variant_sku]);
                         }
                     }
-                    // 3. Tandai order ini sudah diproses agar tidak dieksekusi lagi
                     $order->update(['is_stock_deducted' => true]);
                     $this->line("Successfully processed Order SN: {$order->order_sn}");
                 });
