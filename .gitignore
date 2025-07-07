@@ -43,3 +43,6 @@ resources/plugins/*
 !resources/plugins/
 !resources/plugins/installed.json
 app/Models/Archive.zip
+app/Models/models.zip
+resources/themes/anchor/pages/customer/sample.zip
+resources/themes/anchor/pages/customer/sample.zip
