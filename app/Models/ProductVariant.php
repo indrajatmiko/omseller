@@ -40,4 +40,31 @@ class ProductVariant extends Model
     {
         return $this->warehouse_stock - $this->reserved_stock;
     }
+
+    /**
+     * Menghitung ulang total stok gudang berdasarkan semua pergerakan stok
+     * dan menyimpannya ke database.
+     * 
+     * @return void
+     */
+    public function updateWarehouseStock(): void
+    {
+        // Hitung total stok dengan menjumlahkan semua kolom 'quantity'
+        // dari pergerakan stok yang terkait.
+        $newStock = $this->stockMovements()->sum('quantity');
+
+        // Update kolom 'warehouse_stock' di model ini
+        $this->warehouse_stock = $newStock;
+        $this->save();
+        
+        // **PENTING**: Karena satu SKU bisa digunakan di banyak produk,
+        // kita juga perlu menyinkronkan total stok ini ke semua varian lain
+        // yang memiliki SKU yang sama untuk menjaga konsistensi data.
+        if ($this->variant_sku) {
+            ProductVariant::where('variant_sku', $this->variant_sku)
+                          // Pastikan tidak mengupdate diri sendiri dua kali
+                          ->where('id', '!=', $this->id)
+                          ->update(['warehouse_stock' => $newStock]);
+        }
+    }
 }

@@ -70,6 +70,7 @@ new class extends Component {
             ->where('user_id', auth()->id())
             // PERUBAHAN 2: Ambil order dari kemarin dan hari ini
             ->where('created_at', '>=', today()->subDay())
+            ->where('address_full', '!=', '')
             ->when($this->search, function ($query) {
                 $query->where('order_sn', 'like', '%' . $this->search . '%');
             })
