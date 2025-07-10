@@ -19,20 +19,15 @@ class ProcessPickedUpOrders extends Command
     {
         $this->info('Starting to process orders picked up today...');
 
-        // Ambil tanggal hari ini.
         $today = Carbon::today();
 
-        // Query untuk mencari Order yang memenuhi SEMUA kondisi berikut:
-        // 1. Stoknya belum dikurangi (is_stock_deducted = false).
-        // 2. Memiliki riwayat status (statusHistories).
-        // 3. Di dalam riwayat status tersebut, ada 'pickup_time' yang tidak null.
-        // 4. DAN 'pickup_time' tersebut berada pada tanggal hari ini (whereDate).
+        // Kueri ini tetap sama, karena kita masih perlu menandai pesanan sebagai selesai diproses.
         $ordersToProcess = Order::where('is_stock_deducted', false)
             ->whereHas('statusHistories', function ($query) use ($today) {
                 $query->whereNotNull('pickup_time')
-                      ->whereDate('pickup_time', $today); // <-- PERBAIKAN UTAMA: Filter berdasarkan tanggal hari ini
+                      ->whereDate('pickup_time', $today);
             })
-            ->with('items')
+            ->with('items.productVariant.product') // Eager load relasi yang lebih dalam
             ->get();
 
         if ($ordersToProcess->isEmpty()) {
@@ -44,31 +39,53 @@ class ProcessPickedUpOrders extends Command
 
         foreach ($ordersToProcess as $order) {
             try {
+                // Kita tetap menggunakan transaksi untuk memastikan semua item dalam satu pesanan berhasil atau gagal bersama.
                 DB::transaction(function () use ($order) {
                     foreach ($order->items as $item) {
-                        $variant = ProductVariant::where('variant_sku', $item->variant_sku)
-                                                 ->whereHas('product', fn($q) => $q->where('user_id', $order->user_id))
-                                                 ->first();
+                        // Kita sudah eager load varian, jadi tidak perlu query lagi di dalam loop.
+                        // Ini juga lebih efisien.
+                        $variant = $item->productVariant;
 
-                        if ($variant) {
+                        if ($variant && $variant->product->user_id === $order->user_id) {
                             $quantityToDeduct = $item->quantity;
                             
-                            $variant->decrement('warehouse_stock', $quantityToDeduct);
-                            
-                            StockMovement::create([
-                                'user_id' => $order->user_id,
-                                'product_variant_id' => $variant->id,
-                                'order_id' => $order->id,
-                                'type' => 'sale',
-                                'quantity' => -$quantityToDeduct,
-                                'notes' => 'Pengurangan otomatis dari Order SN: ' . $order->order_sn,
-                            ]);
+                            // ======================================================
+                            // PERBAIKAN UTAMA: Menerapkan Pola Idempoten
+                            // ======================================================
+                            $movement = StockMovement::firstOrCreate(
+                                // 1. Kunci Unik: Cari movement berdasarkan kombinasi ini.
+                                [
+                                    'order_id' => $order->id,
+                                    'product_variant_id' => $variant->id,
+                                    'type' => 'sale',
+                                ],
+                                // 2. Nilai: Hanya akan digunakan jika record baru dibuat.
+                                [
+                                    'user_id' => $order->user_id,
+                                    'quantity' => -$quantityToDeduct,
+                                    'notes' => 'Pengurangan otomatis dari Order SN: ' . $order->order_sn,
+                                ]
+                            );
+
+                            // 3. Aksi Kondisional: Hanya kurangi stok jika movement BARU dibuat.
+                            if ($movement->wasRecentlyCreated) {
+                                $variant->decrement('warehouse_stock', $quantityToDeduct);
+                                $this->line("   - SKU {$variant->variant_sku}: Stock deducted by {$quantityToDeduct}.");
+                            } else {
+                                $this->line("   - SKU {$variant->variant_sku}: Stock already deducted for this order. Skipping.");
+                            }
+                            // ======================================================
+                            // AKHIR DARI PERBAIKAN
+                            // ======================================================
+
                         } else {
-                            Log::warning("SKU not found for order item.", ['order_sn' => $order->order_sn, 'sku' => $item->variant_sku]);
+                            Log::warning("SKU not found or user mismatch for order item.", ['order_sn' => $order->order_sn, 'sku' => $item->variant_sku]);
                         }
                     }
+                    
+                    // Menandai pesanan selesai diproses tetap penting
                     $order->update(['is_stock_deducted' => true]);
-                    $this->line("Successfully processed Order SN: {$order->order_sn}");
+                    $this->info("Successfully processed Order SN: {$order->order_sn}");
                 });
             } catch (\Exception $e) {
                 Log::error('Failed to process order for stock deduction.', ['order_sn' => $order->order_sn, 'error' => $e->getMessage()]);

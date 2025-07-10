@@ -2,12 +2,12 @@
 
 use function Laravel\Folio\{middleware, name};
 use App\Models\ProductVariant;
-use App\Models\StockMovement;
+use App\Models\StockAdjustment; // PERUBAHAN: Import model baru
 use Livewire\Volt\Component;
 use Livewire\WithPagination;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use Filament\Notifications\Notification; // <-- BARU: Import Notifikasi Filament
+use Filament\Notifications\Notification;
 
 middleware('auth');
 name('inventory.stock');
@@ -16,13 +16,11 @@ new class extends Component {
     use WithPagination;
 
     public string $search = '';
-    public array $skuData = [];
-    // HAPUS: public ?string $justSavedSku = null;
-    public string $focusedInput = '';
+    public array $skuData = []; 
 
     public function mount(): void
     {
-        $this->loadSkuDataForCurrentPage();
+        // Tidak perlu memuat data di mount, biarkan `with()` yang menangani
     }
 
     public function updatedSearch(): void
@@ -30,119 +28,103 @@ new class extends Component {
         $this->resetPage();
     }
     
-    // Fungsi untuk memuat data dan memformatnya untuk tampilan
-    protected function loadSkuDataForCurrentPage(): void
+    protected function initializeAdjustmentValues(): void
     {
         $paginatedSkus = $this->getPaginatedSkus();
-        $variantsBySku = $this->getVariantsForSkus($paginatedSkus->pluck('variant_sku')->all());
-
         foreach ($paginatedSkus as $skuItem) {
             $sku = $skuItem->variant_sku;
-            $firstVariant = $variantsBySku[$sku]->first() ?? null;
-
-            if ($firstVariant) {
-                $this->skuData[$sku] = [
-                    // 'cost_price' => number_format($firstVariant->cost_price ?? 0, 0, ',', '.'),
-                    'warehouse_stock' => number_format($firstVariant->warehouse_stock ?? 0, 0, ',', '.'),
-                ];
+            if (!isset($this->skuData[$sku]['adjustment'])) {
+                $this->skuData[$sku]['adjustment'] = null;
+                $this->skuData[$sku]['notes'] = ''; // Inisialisasi notes
             }
         }
     }
 
-    // Fungsi ini dipanggil saat input kehilangan fokus (blur)
-    public function saveSku(string $sku): void
+    public function saveAdjustment(string $sku): void
     {
-        if (empty($sku)) return;
+        $adjustmentValue = (int) ($this->skuData[$sku]['adjustment'] ?? 0);
+        // PERUBAHAN: Ambil nilai 'notes' dari input
+        $notes = trim($this->skuData[$sku]['notes'] ?? '');
         
-        // $costPriceRaw = (float) str_replace('.', '', $this->skuData[$sku]['cost_price'] ?? '0');
-        $warehouseStockRaw = (int) str_replace('.', '', $this->skuData[$sku]['warehouse_stock'] ?? '0');
+        if ($adjustmentValue === 0) {
+            $this->skuData[$sku]['adjustment'] = null;
+            return;
+        }
 
         $validated = validator([
-            // 'cost_price' => $costPriceRaw,
-            'warehouse_stock' => $warehouseStockRaw,
+            'adjustment' => $adjustmentValue,
+            'notes' => $notes, // Validasi notes
         ], [
-            // 'cost_price' => 'nullable|numeric|min:0',
-            'warehouse_stock' => 'required|integer|min:0',
+            'adjustment' => 'required|integer',
+            'notes' => 'nullable|string|max:255',
         ])->validate();
         
-        DB::transaction(function () use ($sku, $validated) {
+        $quantityAdjusted = $validated['adjustment'];
+        // PERUBAHAN: Gunakan notes dari validasi, atau fallback ke default
+        $finalNotes = !empty($validated['notes']) ? $validated['notes'] : 'Penyesuaian stok manual dari halaman Stok';
+
+        DB::transaction(function () use ($sku, $quantityAdjusted, $finalNotes) {
             $variantsToUpdate = ProductVariant::where('variant_sku', $sku)
                 ->whereHas('product', fn($q) => $q->where('user_id', auth()->id()))
                 ->get();
-
-            $originalStock = $variantsToUpdate->first()->warehouse_stock ?? 0;
-            $newStock = $validated['warehouse_stock'];
-            $stockDifference = $newStock - $originalStock;
             
-            foreach ($variantsToUpdate as $variant) {
-                $variant->update([
-                    // 'cost_price' => $validated['cost_price'],
-                    'warehouse_stock' => $newStock,
-                ]);
+            if ($variantsToUpdate->isEmpty()) return;
 
-                if ($stockDifference != 0) {
-                    StockMovement::create([
-                        'user_id' => auth()->id(),
-                        'product_variant_id' => $variant->id,
-                        'type' => 'adjustment',
-                        'quantity' => $stockDifference,
-                        'notes' => 'Penyesuaian massal dari Master SKU: ' . $sku,
-                    ]);
-                }
-            }
+            $firstVariant = $variantsToUpdate->first();
+            $stockBefore = $firstVariant->warehouse_stock;
+            $stockAfter = $stockBefore + $quantityAdjusted;
+
+            // PERUBAHAN: Simpan 'finalNotes' ke database
+            StockAdjustment::create([
+                'user_id' => auth()->id(),
+                'variant_sku' => $sku,
+                'product_variant_id' => $firstVariant->id,
+                'stock_before' => $stockBefore,
+                'quantity_adjusted' => $quantityAdjusted,
+                'stock_after' => $stockAfter,
+                'notes' => $finalNotes,
+            ]);
+
+            ProductVariant::where('variant_sku', $sku)
+                ->whereHas('product', fn($q) => $q->where('user_id', auth()->id()))
+                ->update(['warehouse_stock' => $stockAfter]);
         });
         
-        // Format ulang input setelah disimpan, untuk konsistensi
-        // $this->skuData[$sku]['cost_price'] = number_format($costPriceRaw, 0, ',', '.');
-        $this->skuData[$sku]['warehouse_stock'] = number_format($warehouseStockRaw, 0, ',', '.');
+        // PERUBAHAN: Reset kedua input setelah berhasil
+        $this->skuData[$sku]['adjustment'] = null;
+        $this->skuData[$sku]['notes'] = '';
         
-        // PERUBAHAN: Kirim notifikasi Filament
-        Notification::make()
-            ->title('Update Berhasil')
-            ->success()
-            ->body("Perubahan untuk SKU '{$sku}' telah berhasil disimpan.")
-            ->send();
+        Notification::make()->title('Stok Diperbarui')->success()->body("Stok untuk SKU '{$sku}' telah berhasil disesuaikan.")->send();
     }
 
-    public function setFocus(string $sku, string $field): void
+    public function setFocus(string $sku): void
     {
-        $this->focusedInput = "{$sku}-{$field}";
-        if (isset($this->skuData[$sku][$field])) {
-            $this->skuData[$sku][$field] = str_replace('.', '', $this->skuData[$sku][$field]);
+        if ($this->skuData[$sku]['adjustment'] === '0') {
+             $this->skuData[$sku]['adjustment'] = '';
         }
     }
 
-    private function getPaginatedSkus()
-    {
+    private function getPaginatedSkus() {
         return ProductVariant::query()
-            // JOIN ke tabel produk untuk mendapatkan category_id
             ->join('products', 'product_variants.product_id', '=', 'products.id')
-            // LEFT JOIN agar produk tanpa kategori tetap muncul
             ->leftJoin('product_categories', 'products.product_category_id', '=', 'product_categories.id')
-            // Filter berdasarkan user_id di tabel produk
             ->where('products.user_id', auth()->id())
             ->where('products.status', 'active')
-            // Filter SKU yang valid, pastikan nama kolom spesifik
             ->where(function($q) {
                 $q->where('product_variants.variant_sku', '!=', '')->whereNotNull('product_variants.variant_sku');
             })
             ->when($this->search, function($q) {
-                // Pencarian bisa diperluas untuk mencari di nama produk atau kategori juga
                 $q->where('product_variants.variant_sku', 'like', '%' . $this->search . '%')
                   ->orWhere('products.product_name', 'like', '%' . $this->search . '%')
                   ->orWhere('product_categories.name', 'like', '%' . $this->search . '%');
             })
-            // Pilih kolom variant_sku secara eksplisit
-            ->select('product_variants.variant_sku')
-            ->distinct()
-            // Urutkan berdasarkan nama kategori (NULLs akan di awal), lalu berdasarkan SKU
+            ->select('product_variants.variant_sku', 'product_variants.warehouse_stock')
+            ->distinct('product_variants.variant_sku')
             ->orderByRaw('ISNULL(product_categories.name), product_categories.name ASC, product_variants.variant_sku ASC')
             ->paginate(50);
     }
     
-    // Fungsi helper untuk mengambil data varian secara efisien
-    private function getVariantsForSkus(array $skus)
-    {
+    private function getVariantsForSkus(array $skus) {
         return ProductVariant::whereIn('variant_sku', $skus)
             ->whereHas('product', fn($q) => $q->where('user_id', auth()->id()))
             ->with('product:id,product_name')
@@ -152,9 +134,8 @@ new class extends Component {
 
     public function with(): array
     {
+        $this->initializeAdjustmentValues();
         $paginatedSkus = $this->getPaginatedSkus();
-        $this->loadSkuDataForCurrentPage();
-
         return [
             'skus' => $paginatedSkus,
             'variantsBySku' => $this->getVariantsForSkus($paginatedSkus->pluck('variant_sku')->all()),
@@ -167,61 +148,74 @@ new class extends Component {
         <div>
             <x-app.container>
                 <x-app.heading 
-                    title="Master SKU"
-                    description="Kelola harga modal dan stok untuk setiap SKU unik secara terpusat. Perubahan akan tersimpan otomatis saat Anda beralih dari input."
+                    title="Penyesuaian Stok"
+                    description="Ubah stok dengan mengisi kolom penyesuaian. Perubahan tersimpan otomatis saat fokus berpindah atau menekan Enter."
                     :border="true" />
 
                 <div class="mt-6">
-                    <input type="search" wire:model.live.debounce.300ms="search" class="block w-full md:w-1/3 rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 py-2 px-3 text-sm placeholder:text-gray-400 focus:border-black dark:focus:border-white focus:ring-1 focus:ring-black dark:focus:ring-white" placeholder="Cari SKU...">
+                    <input type="search" wire:model.live.debounce.300ms="search" class="block w-full md:w-1/3 rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 py-2 px-3 text-sm placeholder:text-gray-400" placeholder="Cari SKU atau Nama Produk...">
                 </div>
 
-                <div class="mt-4 flex flex-col">
+                {{-- ====================================================== --}}
+                {{-- PERUBAHAN UTAMA: DUA BLOK TAMPILAN BERBEDA --}}
+                {{-- ====================================================== --}}
+
+                {{-- 1. TAMPILAN DESKTOP (Terlihat di layar `lg` dan ke atas) --}}
+                <div class="mt-4 flex-col hidden lg:flex">
                     <div class="-my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
                         <div class="py-2 align-middle inline-block min-w-full sm:px-6 lg:px-8">
                             <div class="shadow overflow-hidden border-b border-gray-200 dark:border-gray-700 sm:rounded-lg">
                                 <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                                     <thead class="bg-gray-50 dark:bg-gray-800">
                                         <tr>
-                                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-1/3">SKU</th>
-                                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Stok Gudang</th>
+                                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-2/5">SKU</th>
+                                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Stok Saat Ini</th>
+                                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Tambah / Kurang</th>
+                                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Catatan</th>
                                         </tr>
                                     </thead>
                                     <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
                                         @forelse($skus as $skuItem)
                                             @php 
                                                 $sku = $skuItem->variant_sku; 
+                                                $currentStock = $skuItem->warehouse_stock;
                                                 $currentVariants = $variantsBySku[$sku] ?? collect();
+                                                $stockColorClass = '';
+                                                if ($currentStock <= 2) { $stockColorClass = 'text-red-600 dark:text-red-400 font-bold'; } 
+                                                elseif ($currentStock <= 10) { $stockColorClass = 'text-yellow-600 dark:text-yellow-400 font-semibold'; }
                                             @endphp
-                                            <tr wire:key="sku-row-{{ $sku }}">
+                                            <tr wire:key="stock-row-desktop-{{ $sku }}">
                                                 <td class="px-6 py-4 whitespace-nowrap">
                                                     <div>
                                                         <p class="font-bold text-gray-900 dark:text-white">{{ $sku }}</p>
-                                                        {{-- PERUBAHAN: Tampilkan nama varian --}}
-                                                        @if($variantName = $currentVariants->first()->variant_name)
-                                                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" title="{{ $variantName }}">
-                                                                {{ Str::words($variantName, 6, '...') }}
-                                                            </p>
-                                                        @endif
-                                                        {{-- "Digunakan di" sekarang di bawah nama varian --}}
-                                                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" title="{{ $currentVariants->pluck('product.product_name')->implode(', ') }}">
-                                                            Digunakan di {{ $currentVariants->count() }} produk
-                                                        </p>
+                                                        {{-- @if($variantName = $currentVariants->first()->variant_name)
+                                                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate" title="{{ $variantName }}">{{ $variantName }}</p>
+                                                        @endif --}}
                                                     </div>
                                                 </td>
-                                                <td class="px-6 py-4 whitespace-nowrap align-top">
-                                                    <input type="text"
-                                                           wire:model="skuData.{{ $sku }}.warehouse_stock"
-                                                           wire:focus="setFocus('{{ $sku }}', 'warehouse_stock')"
-                                                           wire:blur="saveSku('{{ $sku }}')"
+                                                <td class="px-6 py-4 whitespace-nowrap align-middle">
+                                                    <span class="text-lg {{ $stockColorClass }}">{{ number_format($currentStock) }}</span>
+                                                </td>
+                                                <td class="px-6 py-4 whitespace-nowrap align-middle">
+                                                    <input type="number"
+                                                           wire:model="skuData.{{ $sku }}.adjustment"
+                                                           wire:blur="saveAdjustment('{{ $sku }}')"
+                                                           wire:keydown.enter="saveAdjustment('{{ $sku }}')"
                                                            class="block w-32 rounded-lg border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 shadow-sm sm:text-sm"
                                                            placeholder="0">
+                                                </td>
+                                                <td class="px-6 py-4 whitespace-nowrap align-middle">
+                                                    <input type="text"
+                                                           wire:model="skuData.{{ $sku }}.notes"
+                                                           wire:blur="saveAdjustment('{{ $sku }}')"
+                                                           wire:keydown.enter="saveAdjustment('{{ $sku }}')"
+                                                           class="block w-full rounded-lg border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 shadow-sm sm:text-sm"
+                                                           placeholder="Opsional">
                                                 </td>
                                             </tr>
                                         @empty
                                             <tr>
-                                                <td colspan="3" class="px-6 py-12 text-center text-gray-500">
-                                                    {{ $this->search ? 'SKU tidak ditemukan.' : 'Tidak ada data SKU.' }}
-                                                </td>
+                                                <td colspan="4" class="px-6 py-12 text-center text-gray-500">{{ $this->search ? 'SKU tidak ditemukan.' : 'Tidak ada data SKU.' }}</td>
                                             </tr>
                                         @endforelse
                                     </tbody>
@@ -231,6 +225,64 @@ new class extends Component {
                     </div>
                 </div>
 
+                {{-- 2. TAMPILAN MOBILE (Terlihat di bawah layar `lg`) --}}
+                <div class="mt-4 grid grid-cols-1 gap-4 lg:hidden">
+                    @forelse($skus as $skuItem)
+                        @php 
+                            $sku = $skuItem->variant_sku; 
+                            $currentStock = $skuItem->warehouse_stock;
+                            $currentVariants = $variantsBySku[$sku] ?? collect();
+                            $stockColorClass = '';
+                            if ($currentStock <= 2) { $stockColorClass = 'text-red-600 dark:text-red-400 font-bold'; } 
+                            elseif ($currentStock <= 10) { $stockColorClass = 'text-yellow-600 dark:text-yellow-400 font-semibold'; }
+                        @endphp
+                        <div wire:key="stock-row-mobile-{{ $sku }}" class="bg-white dark:bg-gray-800/50 shadow overflow-hidden rounded-lg p-4 space-y-4">
+                            {{-- Baris 1: Info SKU & Stok Saat Ini --}}
+                            <div class="flex items-start justify-between">
+                                <div>
+                                    <p class="font-bold text-gray-900 dark:text-white">{{ $sku }}</p>
+                                    {{-- @if($variantName = $currentVariants->first()->variant_name)
+                                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate" title="{{ $variantName }}">{{ $variantName }}</p>
+                                    @endif --}}
+                                </div>
+                                <div class="text-right">
+                                    <label class="text-xs font-medium text-gray-500">Stok Saat Ini</label>
+                                    <p class="text-lg {{ $stockColorClass }}">{{ number_format($currentStock) }}</p>
+                                </div>
+                            </div>
+                            
+                            {{-- PERUBAHAN: Baris 2: Input Penyesuaian & Catatan (berdampingan) --}}
+                            <div class="flex items-start space-x-3">
+                                {{-- Input Penyesuaian (Lebih kecil) --}}
+                                <div class="w-1/3">
+                                    <label for="mobile_adjustment-{{$sku}}" class="block text-xs font-medium text-gray-500 mb-1">Tambah/Kurang</label>
+                                    <input type="number" id="mobile_adjustment-{{$sku}}"
+                                        wire:model="skuData.{{ $sku }}.adjustment"
+                                        wire:blur="saveAdjustment('{{ $sku }}')"
+                                        wire:keydown.enter="saveAdjustment('{{ $sku }}')"
+                                        class="block w-16 rounded-lg border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 shadow-sm text-sm"
+                                        placeholder="0">
+                                </div>
+                                {{-- Input Catatan (Lebih besar) --}}
+                                <div class="flex-1">
+                                    <label for="mobile_notes-{{$sku}}" class="block text-xs font-medium text-gray-500 mb-1">Catatan</label>
+                                    <input type="text" id="mobile_notes-{{$sku}}"
+                                        wire:model="skuData.{{ $sku }}.notes"
+                                        wire:blur="saveAdjustment('{{ $sku }}')"
+                                        wire:keydown.enter="saveAdjustment('{{ $sku }}')"
+                                        class="block w-full rounded-lg border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 shadow-sm text-sm"
+                                        placeholder="Opsional">
+                                </div>
+                            </div>
+                        </div>
+                    @empty
+                        <div class="bg-white dark:bg-gray-800/50 shadow rounded-lg p-12 text-center text-gray-500">
+                            {{ $this->search ? 'SKU tidak ditemukan.' : 'Tidak ada data SKU.' }}
+                        </div>
+                    @endforelse
+                </div>
+                
+                {{-- Paginasi --}}
                 @if($skus->hasPages())
                     <div class="mt-6">
                         {{ $skus->links() }}
