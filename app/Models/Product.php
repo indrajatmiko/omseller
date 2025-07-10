@@ -17,6 +17,8 @@ class Product extends Model
         'image_url',
         'total_sales',
         'total_stock',
+        'product_category_id',
+        'status',
     ];
 
     public function variants()
@@ -28,4 +30,9 @@ class Product extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    public function productCategory()
+    {
+        return $this->belongsTo(productCategory::class);
+    }    
 }
