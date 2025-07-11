@@ -64,7 +64,7 @@
                     <x-app.sidebar-dropdown text="Produk" icon="phosphor-arrows-clockwise" id="produks_dropdown" :active="(Request::is('produks'))" :open="(Request::is('inventory/sku-master') || Request::is('inventory/stock-takes*') || Request::is('inventory/stock*') || Request::is('inventory/categories')) ? '1' : '0'">
                         <x-app.sidebar-link href="/inventory/categories" icon="phosphor-package" :active="(Request::is('inventory/categories'))">Kategori</x-app.sidebar-link>
                         <x-app.sidebar-link href="/inventory/sku-master" icon="phosphor-package" :active="(Request::is('inventory/sku-master'))">SKU Master</x-app.sidebar-link>
-                        <x-app.sidebar-link href="/inventory/stock" icon="phosphor-package" :active="(Request::is('inventory/stock*'))">STOK Update</x-app.sidebar-link>
+                        <x-app.sidebar-link href="/inventory/stock-update" icon="phosphor-package" :active="(Request::is('inventory/stock-update*'))">STOK Update</x-app.sidebar-link>
                         <x-app.sidebar-link href="/inventory/stock-takes" icon="phosphor-trolley-suitcase" :active="(Request::is('inventory/stock-takes*'))">STOK Opname</x-app.sidebar-link>
                     </x-app.sidebar-dropdown>
                     

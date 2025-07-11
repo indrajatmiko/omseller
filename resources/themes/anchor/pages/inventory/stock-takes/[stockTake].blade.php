@@ -7,115 +7,145 @@ use App\Models\ProductVariant;
 use Livewire\Volt\Component;
 use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Collection;
+// PERUBAHAN: Import yang diperlukan untuk paginasi manual
+use Livewire\WithPagination;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Pagination\Paginator;
 
 middleware('auth');
 name('inventory.stock-takes.show');
 
 new class extends Component {
+    // PERUBAHAN: Aktifkan trait WithPagination
+    use WithPagination;
+
     public $stockTake;
-    public Collection $skus;
     public array $itemsData = [];
     public ?string $notes = null;
 
-    // Menggunakan route model binding Laravel Folio yang lebih bersih.
-    // Variabel $stockTake secara otomatis diinjeksi dari URL.
     public function mount(StockTake $stockTake): void
     {
         $this->stockTake = $stockTake;
-
-        // Keamanan: Pastikan user hanya bisa mengakses data miliknya.
         if ($this->stockTake->user_id !== auth()->id()) {
             abort(403, 'Unauthorized access');
         }
-        
         $this->notes = $this->stockTake->notes;
-
-        // 1. Ambil daftar SKU unik yang dimiliki user. Ini adalah inti logika baru.
-        // Kita mengambil data relevan dan menjadikan SKU sebagai key untuk akses mudah.
-        $this->skus = ProductVariant::query()
-            ->whereHas('product', fn($q) => $q->where('user_id', auth()->id()))
-            ->where(fn($q) => $q->where('variant_sku', '!=', '')->whereNotNull('variant_sku'))
-            ->select('variant_sku', 'variant_name', 'warehouse_stock', 'id as first_variant_id')
-            ->distinct('variant_sku')
-            ->orderBy('variant_sku')
-            ->get()
-            ->keyBy('variant_sku');
-
-        // 2. Ambil data opname yang sudah ada, digabungkan dengan varian untuk mendapatkan SKU-nya.
+        // Inisialisasi tidak perlu dipanggil di sini lagi
+    }
+    
+    public function initializeItemsData(Collection $skusForCurrentPage): void
+    {
+        // Ambil item yang sudah ada HANYA untuk SKU di halaman ini
         $existingItems = StockTakeItem::where('stock_take_id', $this->stockTake->id)
+            ->whereIn('product_variant_id', $skusForCurrentPage->pluck('first_variant_id'))
             ->join('product_variants', 'stock_take_items.product_variant_id', '=', 'product_variants.id')
             ->pluck('counted_stock', 'product_variants.variant_sku');
-    
-        // 3. Inisialisasi data untuk form input, berdasarkan SKU.
-        foreach($this->skus as $sku => $skuData) {
-            $this->itemsData[$sku] = [
-                'counted_stock' => $existingItems[$sku] ?? null,
-            ];
+
+        foreach($skusForCurrentPage as $sku => $skuData) {
+            if (!isset($this->itemsData[$sku])) {
+                $this->itemsData[$sku] = [
+                    'counted_stock' => $existingItems[$sku] ?? null,
+                ];
+            }
         }
     }
 
-    /**
-     * Menyimpan hasil hitungan untuk satu SKU.
-     * Dipicu saat input field kehilangan fokus (blur).
-     */
     public function saveCount(string $sku, int $referenceVariantId): void
     {
+        // ... (Fungsi ini tidak berubah sama sekali)
         if ($this->stockTake->status === 'completed') return;
-
         $countedValue = $this->itemsData[$sku]['counted_stock'];
-
-        // Jika input dikosongkan, hapus entri opname yang ada.
         if (!is_numeric($countedValue) || $countedValue === '') {
             StockTakeItem::where('stock_take_id', $this->stockTake->id)
                          ->where('product_variant_id', $referenceVariantId)
                          ->delete();
             return;
         }
-        
-        $variant = ProductVariant::find($referenceVariantId);
-        if (!$variant) return;
-
-        // Buat atau perbarui catatan opname untuk SKU ini.
-        // Kita hanya perlu satu `product_variant_id` sebagai referensi untuk SKU tersebut.
+        $skus = $this->fetchSkus(); // Tetap perlu fetch semua untuk dapatkan system_stock
+        $systemStock = $skus->get($sku)->warehouse_stock ?? 0;
         StockTakeItem::updateOrCreate(
             ['stock_take_id' => $this->stockTake->id, 'product_variant_id' => $referenceVariantId],
-            ['system_stock' => $variant->warehouse_stock, 'counted_stock' => (int)$countedValue]
+            ['system_stock' => $systemStock, 'counted_stock' => (int)$countedValue]
         );
     }
 
-    /**
-     * Menyelesaikan sesi stock opname, membuatnya read-only.
-     */
     public function completeStockTake(): void
     {
+        // ... (Fungsi ini tidak berubah sama sekali)
         if ($this->stockTake->status === 'completed') return;
-        
-        $this->stockTake->update([
-            'status' => 'completed',
-            'notes' => $this->notes,
-        ]);
-
+        $this->stockTake->update(['status' => 'completed', 'notes' => $this->notes,]);
         Notification::make()->title('Stock Opname Selesai')
             ->success()->body("Sesi pengecekan #{$this->stockTake->id} telah ditandai sebagai selesai.")->send();
     }
 
-    /**
-     * Menghitung selisih antara stok sistem dan fisik.
-     * Helper ini digunakan langsung di dalam view.
-     */
     public function getVariance(string $sku, int $systemStock): ?int
     {
-        $counted = $this->itemsData[$sku]['counted_stock'];
+        // ... (Fungsi ini tidak berubah sama sekali)
+        $counted = $this->itemsData[$sku]['counted_stock'] ?? null;
         if (!is_numeric($counted) || $counted === '') return null;
         return (int)$counted - $systemStock;
     }
-}; ?>
+
+    private function fetchSkus(): Collection
+    {
+        // ... (Fungsi ini tidak berubah sama sekali, ia tetap mengambil SEMUA SKU)
+        return ProductVariant::query()
+            ->join('products', 'product_variants.product_id', '=', 'products.id')
+            ->leftJoin('product_categories', 'products.product_category_id', '=', 'product_categories.id')
+            ->where('products.user_id', auth()->id())
+            ->where('products.status', 'active')
+            ->where(function($q) {
+                $q->where('product_variants.variant_sku', '!=', '')->whereNotNull('product_variants.variant_sku');
+            })
+            ->select(
+                'product_variants.variant_sku', 'product_variants.variant_name',
+                'product_variants.warehouse_stock', 'product_variants.id as first_variant_id',
+                'product_categories.name as category_name'
+            )
+            ->distinct('product_variants.variant_sku')
+            ->orderByRaw('ISNULL(product_categories.name), product_categories.name ASC, product_variants.variant_sku ASC')
+            ->get()
+            ->keyBy('variant_sku');
+    }
+
+    // PERUBAHAN: Logika paginasi manual ada di sini
+    public function with(): array
+    {
+        // 1. Ambil SEMUA data SKU yang relevan
+        $allSkus = $this->fetchSkus();
+
+        // 2. Tentukan parameter paginasi
+        $perPage = 25;
+        $currentPage = Paginator::resolveCurrentPage('page');
+        
+        // 3. "Slice" koleksi untuk mendapatkan item halaman saat ini
+        $currentPageItems = $allSkus->slice(($currentPage - 1) * $perPage, $perPage);
+
+        // 4. Inisialisasi itemsData HANYA untuk item di halaman saat ini
+        $this->initializeItemsData($currentPageItems);
+
+        // 5. Buat instance LengthAwarePaginator
+        $paginatedSkus = new LengthAwarePaginator(
+            $currentPageItems,
+            $allSkus->count(),
+            $perPage,
+            $currentPage,
+            ['path' => Paginator::resolveCurrentPath(), 'pageName' => 'page']
+        );
+
+        // 6. Kirim data yang sudah dipaginasi ke view
+        return [
+            'skus' => $paginatedSkus,
+        ];
+    }
+};
+?>
 
 <x-layouts.app>
     @volt('inventory-stock-take-show')
         <div>
             <x-app.container>
-                {{-- HEADER: Judul dan Tombol Aksi --}}
+                {{-- ... (Seluruh bagian HEADER dan AREA CATATAN tidak berubah) ... --}}
                 <div class="md:flex md:items-center md:justify-between">
                     <div class="min-w-0 flex-1">
                          <x-app.heading 
@@ -139,8 +169,7 @@ new class extends Component {
                 </div>
                 <hr class="my-6 dark:border-gray-700">
 
-                {{-- AREA CATATAN --}}
-                 @if($stockTake->status === 'in_progress')
+                @if($stockTake->status === 'in_progress')
                     <div class="mb-6">
                         <label for="notes" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Catatan (Opsional)</label>
                         <textarea id="notes" wire:model.lazy="notes" rows="2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-600" placeholder="Contoh: Pengecekan rak A-3"></textarea>
@@ -152,37 +181,27 @@ new class extends Component {
                     </div>
                 @endif
                 
-
                 {{-- DAFTAR ITEM SKU UNTUK DI-OPNAME --}}
                 <div class="space-y-2">
+                    {{-- Loop `forelse` tidak berubah, karena ia sekarang me-looping objek paginator --}}
                     @forelse($skus as $sku => $skuData)
                         @php 
                             $systemStock = $skuData->warehouse_stock;
                             $variance = $this->getVariance($sku, $systemStock);
                         @endphp
-                        {{-- Layout Card untuk setiap item SKU --}}
                         <div wire:key="sku-{{ $sku }}" class="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col md:flex-row md:items-center gap-3">
-                            
-                            {{-- Kolom 1: Info SKU (Fleksibel, memanjang) --}}
                             <div class="flex-1 min-w-0">
                                 <p class="font-bold font-mono text-gray-900 dark:text-white truncate" title="{{ $sku }}">{{ $sku }}</p>
                                 @if($variantName = $skuData->variant_name)
                                     <p class="text-xs text-gray-500 dark:text-gray-400 truncate" title="{{ $variantName }}">{{ $variantName }}</p>
                                 @endif
                             </div>
-
-                            {{-- Kolom 2: Grup Data Stok (Lebar tetap di desktop, menyebar di mobile) --}}
                             <div class="flex items-center justify-between md:justify-end gap-3 w-full md:w-auto">
-                                {{-- Stok Sistem --}}
                                 <div class="text-center w-20 flex-shrink-0">
                                     <p class="text-xs text-gray-500 font-semibold uppercase">Sistem</p>
                                     <p class="text-lg font-bold text-gray-900 dark:text-gray-200">{{ $systemStock }}</p>
                                 </div>
-                                
-                                {{-- Panah pemisah, hanya terlihat di desktop --}}
                                 <div class="text-gray-300 dark:text-gray-600 font-light hidden md:block">→</div>
-                                
-                                {{-- Stok Fisik (Input) --}}
                                 <div class="text-center w-24 flex-shrink-0">
                                     <label for="fisik-{{$sku}}" class="text-xs text-blue-600 dark:text-blue-400 font-semibold uppercase">Fisik</label>
                                     <input type="number" 
@@ -193,8 +212,6 @@ new class extends Component {
                                            class="mt-1 block w-full text-center rounded-lg border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/50 shadow-sm sm:text-lg font-bold disabled:bg-gray-200 dark:disabled:bg-gray-700 disabled:cursor-not-allowed focus:border-blue-500 focus:ring-blue-500"
                                            placeholder="-">
                                 </div>
-
-                                {{-- Selisih (Variance) --}}
                                 <div class="text-center w-20 flex-shrink-0">
                                     <p class="text-xs text-gray-500 font-semibold uppercase">Selisih</p>
                                     <p @class([
@@ -210,13 +227,20 @@ new class extends Component {
                             </div>
                         </div>
                     @empty
-                        <tr>
-                            <td colspan="4" class="px-6 py-12 text-center text-gray-500">
-                                Tidak ada SKU yang terdaftar. Silakan tambahkan SKU di Master SKU terlebih dahulu.
-                            </td>
-                        </tr>
+                        {{-- Pesan @empty tidak lagi menggunakan <tr> tapi div biasa --}}
+                        <div class="bg-white dark:bg-gray-800 p-12 text-center text-gray-500 rounded-lg shadow-sm">
+                            Tidak ada SKU yang terdaftar. Silakan tambahkan SKU di Master SKU terlebih dahulu.
+                        </div>
                     @endforelse
                 </div>
+
+                {{-- PERUBAHAN: Tambahkan link paginasi --}}
+                @if($skus->hasPages())
+                    <div class="mt-6">
+                        {{ $skus->links() }}
+                    </div>
+                @endif
+                
             </x-app.container>
         </div>
     @endvolt

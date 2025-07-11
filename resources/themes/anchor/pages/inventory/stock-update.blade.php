@@ -10,7 +10,7 @@ use Illuminate\Support\Str;
 use Filament\Notifications\Notification;
 
 middleware('auth');
-name('inventory.stock');
+name('inventory.stock-update');
 
 new class extends Component {
     use WithPagination;
@@ -144,7 +144,7 @@ new class extends Component {
 }; ?>
 
 <x-layouts.app>
-    @volt('inventory-stock')
+    @volt('inventory-stock-update')
         <div>
             <x-app.container>
                 <x-app.heading 
