@@ -55,6 +55,12 @@
                         <x-app.sidebar-link href="/datacenter-ikuti" icon="phosphor-storefront" :active="(Request::is('datacenter-ikuti'))">Tokopedia</x-app.sidebar-link>
                     </x-app.sidebar-dropdown>
                     
+                    <x-app.sidebar-dropdown text="Keuangan" icon="phosphor-arrows-clockwise" id="keuangans_dropdown" :active="(Request::is('keuangans'))" :open="(Request::is('finances/expenses') || Request::is('sinkronisasi/produk-shopee') || Request::is('datacenter-ikuti')) ? '1' : '0'">
+                        <x-app.sidebar-link href="/finances/expenses" icon="phosphor-package" :active="(Request::is('finances/expenses'))">Pengeluaran</x-app.sidebar-link>
+                        <x-app.sidebar-link href="/sinkronisasi/pesanan-shopee" icon="phosphor-trolley-suitcase" :active="(Request::is('sinkronisasi/pesanan-shopee'))">Pesanan</x-app.sidebar-link>
+                        <x-app.sidebar-link href="/datacenter-ikuti" icon="phosphor-storefront" :active="(Request::is('datacenter-ikuti'))">Tokopedia</x-app.sidebar-link>
+                    </x-app.sidebar-dropdown>
+                    
                     <x-app.sidebar-dropdown text="Pelanggan" icon="phosphor-arrows-clockwise" id="pelangans_dropdown" :active="(Request::is('pelangans'))" :open="(Request::is('customer/name-update') || Request::is('customer/detail') || Request::is('customer/segmentation')) ? '1' : '0'">
                         <x-app.sidebar-link href="/customer/name-update" icon="phosphor-package" :active="(Request::is('customer/name-update'))">Update Nama</x-app.sidebar-link>
                         <x-app.sidebar-link href="/customer/detail" icon="phosphor-trolley-suitcase" :active="(Request::is('customer/detail'))">Database</x-app.sidebar-link>
