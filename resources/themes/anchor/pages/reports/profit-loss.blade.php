@@ -2,7 +2,6 @@
 
 use function Laravel\Folio\{middleware, name};
 use App\Models\Order;
-use App\Models\OrderItem;
 use App\Models\AdTransaction;
 use App\Models\Expense;
 use Livewire\Volt\Component;
@@ -31,24 +30,14 @@ new class extends Component {
         $this->summaryMonthToDate = $this->getEmptySummary();
         $this->summaryPrevMonth = $this->getEmptySummary();
     }
-
-    private function getBaseQuery($userId)
+    
+    private function getUniqueOrderHistoryQuery($userId)
     {
-        return Order::query()
-            ->from('orders as o')
-            ->where('o.user_id', $userId)
-            ->join(DB::raw('(SELECT order_id, MIN(pickup_time) as first_pickup_time 
-                             FROM order_status_histories 
-                             WHERE status = \'Sudah Kirim\' AND pickup_time IS NOT NULL 
-                             GROUP BY order_id) as unique_osh'), 
-                  'o.id', '=', 'unique_osh.order_id')
-            ->join('order_items as oi', 'o.id', '=', 'oi.order_id')
-            ->leftJoin(DB::raw('(SELECT variant_sku, MIN(cost_price) as cost_price
-                                FROM product_variants
-                                WHERE variant_sku IS NOT NULL AND variant_sku != \'\'
-                                GROUP BY variant_sku) as unique_pv'),
-                      'oi.variant_sku', '=', 'unique_pv.variant_sku')
-            ->join('order_payment_details as opd', 'o.id', '=', 'opd.order_id');
+        return DB::table('order_status_histories')
+            ->select('order_id', DB::raw('MIN(pickup_time) as first_pickup_time'))
+            ->where('status', 'Sudah Kirim')
+            ->whereNotNull('pickup_time')
+            ->groupBy('order_id');
     }
 
     private function generateReportData()
@@ -59,24 +48,26 @@ new class extends Component {
         
         $lastDayForTable = (now()->year == $this->selectedYear && now()->month == $this->selectedMonth)
             ? now()->subDay()->day : $startDate->daysInMonth;
-        
         $this->daysInMonth = $lastDayForTable;
 
-        $prevMonthStartDate = $startDate->copy()->subMonthNoOverflow();
-        $prevMonthEndDate = now()->copy()->subMonthNoOverflow()->endOfDay();
-        $this->summaryPrevMonth = $this->getAggregatedSummary($userId, $prevMonthStartDate, $prevMonthEndDate);
+        $uniqueOshSubquery = $this->getUniqueOrderHistoryQuery($userId);
 
-        $salesData = $this->getBaseQuery($userId)
+        $itemBasedData = DB::table('orders as o')
+            ->where('o.user_id', $userId)
+            ->joinSub($uniqueOshSubquery, 'unique_osh', 'o.id', '=', 'unique_osh.order_id')
+            ->join('order_items as oi', 'o.id', '=', 'oi.order_id')
+            ->leftJoin(DB::raw('(SELECT variant_sku, MIN(cost_price) as cost_price FROM product_variants WHERE variant_sku IS NOT NULL AND variant_sku != \'\' GROUP BY variant_sku) as unique_pv'), 'oi.variant_sku', '=', 'unique_pv.variant_sku')
             ->whereBetween('unique_osh.first_pickup_time', [$startDate, $endDate])
-            ->select(
-                DB::raw('DATE(unique_osh.first_pickup_time) as date'),
-                DB::raw('SUM(oi.subtotal) as omset'),
-                DB::raw('SUM(oi.quantity * unique_pv.cost_price) as total_cogs'),
-                DB::raw('SUM(opd.admin_fee) as biaya_admin'),
-                DB::raw('SUM(opd.service_fee) as biaya_service'),
-                DB::raw('SUM(opd.ams_commission_fee) as komisi_ams'),
-                DB::raw('SUM(opd.shop_voucher) as voucher_toko')
-            )
+            ->select(DB::raw('DATE(unique_osh.first_pickup_time) as date'), DB::raw('SUM(oi.subtotal) as omset'), DB::raw('SUM(oi.quantity * unique_pv.cost_price) as total_cogs'))
+            ->groupBy('date')
+            ->get()->keyBy(fn($item) => Carbon::parse($item->date)->format('Y-m-d'));
+
+        $orderBasedFees = DB::table('orders as o')
+            ->where('o.user_id', $userId)
+            ->joinSub($uniqueOshSubquery, 'unique_osh', 'o.id', '=', 'unique_osh.order_id')
+            ->join('order_payment_details as opd', 'o.id', '=', 'opd.order_id')
+            ->whereBetween('unique_osh.first_pickup_time', [$startDate, $endDate])
+            ->select(DB::raw('DATE(unique_osh.first_pickup_time) as date'), DB::raw('SUM(opd.admin_fee) as biaya_admin'), DB::raw('SUM(opd.service_fee) as biaya_service'), DB::raw('SUM(opd.ams_commission_fee) as komisi_ams'), DB::raw('SUM(opd.shop_voucher) as voucher_toko'))
             ->groupBy('date')
             ->get()->keyBy(fn($item) => Carbon::parse($item->date)->format('Y-m-d'));
 
@@ -92,14 +83,14 @@ new class extends Component {
         for ($i = 1; $i <= $startDate->daysInMonth; $i++) {
             $currentDate = Carbon::create($this->selectedYear, $this->selectedMonth, $i)->format('Y-m-d');
             
-            $omset = $salesData[$currentDate]->omset ?? 0;
-            $cogs = $salesData[$currentDate]->total_cogs ?? 0;
+            $omset = $itemBasedData[$currentDate]->omset ?? 0;
+            $cogs = $itemBasedData[$currentDate]->total_cogs ?? 0;
             $laba_kotor = $omset - $cogs;
             
-            $biaya_admin = abs($salesData[$currentDate]->biaya_admin ?? 0);
-            $biaya_service = abs($salesData[$currentDate]->biaya_service ?? 0);
-            $komisi_ams = abs($salesData[$currentDate]->komisi_ams ?? 0);
-            $voucher_toko = abs($salesData[$currentDate]->voucher_toko ?? 0);
+            $biaya_admin = abs($orderBasedFees[$currentDate]->biaya_admin ?? 0);
+            $biaya_service = abs($orderBasedFees[$currentDate]->biaya_service ?? 0);
+            $komisi_ams = abs($orderBasedFees[$currentDate]->komisi_ams ?? 0);
+            $voucher_toko = abs($orderBasedFees[$currentDate]->voucher_toko ?? 0);
             $biaya_iklan = $adsData[$currentDate]->biaya_iklan ?? 0;
             $pengeluaran = $expensesData[$currentDate]->pengeluaran ?? 0;
 
@@ -109,42 +100,60 @@ new class extends Component {
             $report[$i] = ['day' => str_pad($i, 2, '0', STR_PAD_LEFT), 'omset' => $omset, 'laba_kotor' => $laba_kotor, 'biaya_admin' => $biaya_admin, 'biaya_service' => $biaya_service, 'komisi_ams' => $komisi_ams, 'voucher_toko' => $voucher_toko, 'biaya_iklan' => $biaya_iklan, 'pengeluaran' => $pengeluaran, 'profit' => $profit];
         }
         
-        $this->calculateSummaries($report); // Panggilan ini sekarang akan berfungsi
+        $prevMonthStartDate = $startDate->copy()->subMonthNoOverflow();
+        $prevMonthEndDate = now()->copy()->subMonthNoOverflow()->endOfDay();
+        $this->summaryPrevMonth = $this->getAggregatedSummary($userId, $prevMonthStartDate, $prevMonthEndDate);
+        
+        $todayStartDate = now()->startOfDay();
+        $todayEndDate = now()->endOfDay();
+        $this->summaryToday = $this->getAggregatedSummary($userId, $todayStartDate, $todayEndDate);
+        
+        $this->calculateMonthToDateSummary($report); 
         return $report;
     }
 
     private function getAggregatedSummary($userId, $startDate, $endDate): array
     {
-        $sales = $this->getBaseQuery($userId)
+        $uniqueOshSubquery = $this->getUniqueOrderHistoryQuery($userId);
+
+        $itemBased = DB::table('orders as o')
+            ->where('o.user_id', $userId)
+            ->joinSub($uniqueOshSubquery, 'unique_osh', 'o.id', '=', 'unique_osh.order_id')
+            ->join('order_items as oi', 'o.id', '=', 'oi.order_id')
+            ->leftJoin(DB::raw('(SELECT variant_sku, MIN(cost_price) as cost_price FROM product_variants WHERE variant_sku IS NOT NULL AND variant_sku != \'\' GROUP BY variant_sku) as unique_pv'), 'oi.variant_sku', '=', 'unique_pv.variant_sku')
             ->whereBetween('unique_osh.first_pickup_time', [$startDate, $endDate])
-            ->selectRaw('SUM(oi.subtotal) as omset, SUM(oi.quantity * unique_pv.cost_price) as total_cogs, SUM(opd.admin_fee) as biaya_admin, SUM(opd.service_fee) as biaya_service, SUM(opd.ams_commission_fee) as komisi_ams, SUM(opd.shop_voucher) as voucher_toko')->first();
+            ->selectRaw('SUM(oi.subtotal) as omset, SUM(oi.quantity * unique_pv.cost_price) as total_cogs')
+            ->first();
+        
+        $orderBased = DB::table('orders as o')
+            ->where('o.user_id', $userId)
+            ->joinSub($uniqueOshSubquery, 'unique_osh', 'o.id', '=', 'unique_osh.order_id')
+            ->join('order_payment_details as opd', 'o.id', '=', 'opd.order_id')
+            ->whereBetween('unique_osh.first_pickup_time', [$startDate, $endDate])
+            ->selectRaw('SUM(opd.admin_fee) as biaya_admin, SUM(opd.service_fee) as biaya_service, SUM(opd.ams_commission_fee) as komisi_ams, SUM(opd.shop_voucher) as voucher_toko')
+            ->first();
 
         $ads = AdTransaction::where('user_id', $userId)->whereBetween('transaction_date', [$startDate, $endDate])->where('amount', '<', 0)->sum('amount');
         $expenses = Expense::where('user_id', $userId)->whereBetween('transaction_date', [$startDate, $endDate])->sum('amount');
         
-        $laba_kotor = ($sales->omset ?? 0) - ($sales->total_cogs ?? 0);
-        $biaya_admin = abs($sales->biaya_admin ?? 0);
-        $biaya_service = abs($sales->biaya_service ?? 0);
-        $komisi_ams = abs($sales->komisi_ams ?? 0);
-        $voucher_toko = abs($sales->voucher_toko ?? 0);
+        $laba_kotor = ($itemBased->omset ?? 0) - ($itemBased->total_cogs ?? 0);
+        $biaya_admin = abs($orderBased->biaya_admin ?? 0);
+        $biaya_service = abs($orderBased->biaya_service ?? 0);
+        $komisi_ams = abs($orderBased->komisi_ams ?? 0);
+        $voucher_toko = abs($orderBased->voucher_toko ?? 0);
         $biaya_iklan = abs($ads ?? 0);
         
         $total_biaya = $biaya_admin + $biaya_service + $komisi_ams + $voucher_toko + $biaya_iklan + $expenses;
 
-        return ['omset' => $sales->omset ?? 0, 'laba_kotor' => $laba_kotor, 'biaya_admin' => $biaya_admin, 'biaya_service' => $biaya_service, 'komisi_ams' => $komisi_ams, 'voucher_toko' => $voucher_toko, 'biaya_iklan' => $biaya_iklan, 'pengeluaran' => $expenses, 'profit' => $laba_kotor - $total_biaya];
+        return ['omset' => $itemBased->omset ?? 0, 'laba_kotor' => $laba_kotor, 'biaya_admin' => $biaya_admin, 'biaya_service' => $biaya_service, 'komisi_ams' => $komisi_ams, 'voucher_toko' => $voucher_toko, 'biaya_iklan' => $biaya_iklan, 'pengeluaran' => $expenses, 'profit' => $laba_kotor - $total_biaya];
     }
     
-    // --- METODE YANG HILANG SEKARANG DITAMBAHKAN ---
-    private function calculateSummaries(array $report): void
+    // --- SEMUA METODE HELPER SEKARANG ADA DI SINI ---
+    private function calculateMonthToDateSummary(array $report): void
     {
-        $today = now()->day;
         $yesterday = now()->subDay()->day;
-        
-        $this->summaryToday = (now()->year == $this->selectedYear && now()->month == $this->selectedMonth && isset($report[$today])) 
-            ? $report[$today] 
-            : $this->getEmptySummary();
-        
         $monthToDate = $this->getEmptySummary();
+        
         if (now()->format('Y-m') == Carbon::create($this->selectedYear, $this->selectedMonth)->format('Y-m')) {
             for ($i = 1; $i <= $yesterday; $i++) {
                 if (isset($report[$i])) {
