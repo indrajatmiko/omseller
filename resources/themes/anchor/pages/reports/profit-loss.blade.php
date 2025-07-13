@@ -211,7 +211,7 @@ new class extends Component {
         {{-- ====================================================== --}}
         {{-- CARD RINGKASAN DENGAN WARNA BARU --}}
         {{-- ====================================================== --}}
-        <div class="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="mt-6 grid grid-cols-1 lg:grid-cols-1 gap-6">
             {{-- Card Hari Ini --}}
             <div class="bg-white dark:bg-gray-800/50 shadow-sm rounded-lg p-6">
                 <h4 class="font-semibold text-gray-900 dark:text-white">Ringkasan Hari Ini ({{ now()->isoFormat('D MMM YYYY') }})</h4>

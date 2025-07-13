@@ -24,7 +24,6 @@ new class extends Component {
     public array $inventoryHealth = [];
     public Collection $topPerformingProducts;
     public Collection $bottomPerformingProducts;
-    public array $costBreakdownChartData = [];
     
     // Properti untuk Grafik
     public array $profitLossChartData = [];
@@ -47,10 +46,18 @@ new class extends Component {
         return [$startDate, $endDate];
     }
     
-    // --- METODE YANG HILANG SEKARANG ADA DI SINI ---
+    private function getUniqueOrderHistoryQuery($userId)
+    {
+        return DB::table('order_status_histories')
+            ->select('order_id', DB::raw('MIN(pickup_time) as first_pickup_time'))
+            ->where('status', 'Sudah Kirim')
+            ->whereNotNull('pickup_time')
+            ->groupBy('order_id');
+    }
+    
     private function getAggregatedSummary($userId, $startDate, $endDate): array
     {
-        $uniqueOshSubquery = DB::table('order_status_histories')->select('order_id', DB::raw('MIN(pickup_time) as first_pickup_time'))->where('status', 'Sudah Kirim')->whereNotNull('pickup_time')->groupBy('order_id');
+        $uniqueOshSubquery = $this->getUniqueOrderHistoryQuery($userId);
 
         $itemBased = DB::table('orders as o')->where('o.user_id', $userId)->joinSub($uniqueOshSubquery, 'unique_osh', 'o.id', '=', 'unique_osh.order_id')->join('order_items as oi', 'o.id', '=', 'oi.order_id')->leftJoin(DB::raw('(SELECT variant_sku, MIN(cost_price) as cost_price FROM product_variants WHERE variant_sku IS NOT NULL AND variant_sku != \'\' GROUP BY variant_sku) as unique_pv'), 'oi.variant_sku', '=', 'unique_pv.variant_sku')->whereBetween('unique_osh.first_pickup_time', [$startDate, $endDate])->selectRaw('SUM(oi.subtotal) as omset, SUM(oi.quantity * unique_pv.cost_price) as total_cogs')->first();
         
@@ -68,10 +75,20 @@ new class extends Component {
         
         $total_biaya = $biaya_admin + $biaya_service + $komisi_ams + $voucher_toko + $biaya_iklan + $expenses;
 
-        return ['omset' => $itemBased->omset ?? 0, 'laba_kotor' => $laba_kotor, 'biaya_admin' => $biaya_admin, 'biaya_service' => $biaya_service, 'komisi_ams' => $komisi_ams, 'voucher_toko' => $voucher_toko, 'biaya_iklan' => $biaya_iklan, 'pengeluaran' => $expenses, 'profit_bersih' => $laba_kotor - $total_biaya, 'total_cogs' => $itemBased->total_cogs ?? 0, 'total_marketplace_fees' => $biaya_admin + $biaya_service + $komisi_ams + $voucher_toko];
+        return [
+            'omset' => $itemBased->omset ?? 0, 
+            'laba_kotor' => $laba_kotor, 
+            'biaya_admin' => $biaya_admin, 
+            'biaya_service' => $biaya_service, 
+            'komisi_ams' => $komisi_ams, 
+            'voucher_toko' => $voucher_toko, 
+            'biaya_iklan' => $biaya_iklan, 
+            'pengeluaran' => $expenses, 
+            'profit_bersih' => $laba_kotor - $total_biaya, 
+            'total_cogs' => $itemBased->total_cogs ?? 0, 
+            'total_marketplace_fees' => $biaya_admin + $biaya_service + $komisi_ams + $voucher_toko
+        ];
     }
-    
-    // --- SEMUA METODE LAINNYA JUGA LENGKAP DI SINI ---
     
     private function getProfitLossSummary($summary): array
     {
@@ -153,15 +170,26 @@ new class extends Component {
 
         // Siapkan data untuk grafik
         $this->prepareChartsData($userId, $startDate);
-        $this->costBreakdownChartData = [
-            'labels' => array_keys($this->costBreakdown),
-            'series' => array_map('floatval', array_values($this->costBreakdown)),
-        ];
+        
+        // Kirim event ke browser setelah semua data baru siap
+        $this->dispatch('quarterly-data-updated', [
+            'profitLossChartData' => $this->profitLossChartData,
+            'costBreakdownChartData' => [
+                'labels' => array_keys($this->costBreakdown),
+                'series' => array_map('floatval', array_values($this->costBreakdown)),
+            ]
+        ]);
+        
         $availableYears = Order::where('user_id', auth()->id())
             ->join('order_status_histories', 'orders.id', '=', 'order_status_histories.order_id')
             ->whereNotNull('order_status_histories.pickup_time')->where('order_status_histories.status', 'Sudah Kirim')
             ->select(DB::raw('YEAR(order_status_histories.pickup_time) as year'))
             ->distinct()->orderBy('year', 'desc')->get()->pluck('year');
+        
+        // Jika tidak ada data sama sekali, setidaknya sediakan tahun ini untuk filter
+        if ($availableYears->isEmpty()) {
+            $availableYears = collect([now()->year]);
+        }
         
         return ['availableYears' => $availableYears];
     }
@@ -177,6 +205,9 @@ new class extends Component {
         <div class="mt-6 flex items-center justify-between">
             <div class="flex items-center gap-2">
                 <x-select-input wire:model.live="selectedYear" class="text-sm">
+                    @if(empty($availableYears))
+                        <option>{{ now()->year }}</option>
+                    @endif
                     @foreach($availableYears as $year)<option value="{{ $year }}">{{ $year }}</option>@endforeach
                 </x-select-input>
                 <x-select-input wire:model.live="selectedQuarter" class="text-sm">
@@ -188,94 +219,66 @@ new class extends Component {
             </div>
         </div>
         
-        {{-- PERUBAHAN 1: Struktur Grid Baru --}}
         <div class="mt-8 space-y-8">
-            {{-- Bagian Atas: Card Ringkasan & Biaya --}}
             <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
-                {{-- Kolom Kiri Lebih Besar (3/5) --}}
                 <div class="lg:col-span-3 space-y-8">
-                    {{-- 1. Widget: Ringkasan Laba Rugi dengan Grafik Modern --}}
-                    <div class="bg-white dark:bg-gray-800/50 shadow-sm rounded-lg p-6"
+                    {{-- 1. Widget Laba Rugi dengan Grafik --}}
+                    <div wire:key="profit-loss-chart-widget" class="bg-white dark:bg-gray-800/50 shadow-sm rounded-lg p-6"
                         x-data="{
-                            chartData: @entangle('profitLossChartData'),
+                            chart: null,
+                            // --- FUNGSI renderChart() DAN getOptions() HARUS ADA DI SINI ---
                             init() {
-                                let chart = new ApexCharts(this.$refs.chart, this.getOptions());
-                                chart.render();
-                                this.$watch('chartData', () => {
-                                    chart.updateOptions(this.getOptions());
+                                let initialData = @js($profitLossChartData);
+                                this.renderChart(initialData);
+                                
+                                window.addEventListener('quarterly-data-updated', event => {
+                                    this.renderChart(event.detail[0].profitLossChartData);
                                 });
+
                                 window.addEventListener('theme-changed', () => {
-                                    chart.updateOptions({ theme: { mode: localStorage.getItem('theme') } });
+                                    if(this.chart) {
+                                        this.chart.updateOptions({ theme: { mode: localStorage.getItem('theme') } });
+                                    }
                                 });
                             },
-                            getOptions() {
+                            renderChart(data) {
+                                if (this.chart) {
+                                    this.chart.destroy();
+                                }
+                                this.chart = new ApexCharts(this.$refs.chart, this.getOptions(data));
+                                this.chart.render();
+                            },
+                            getOptions(data) {
                                 return {
-                                    chart: { 
-                                        type: 'area', 
-                                        height: 250,
-                                        toolbar: { show: false },
-                                    },
-                                    series: this.chartData.series,
-                                    
+                                    chart: { type: 'area', height: 250, toolbar: { show: false } },
+                                    series: data.series,
                                     xaxis: {
-                                        categories: this.chartData.labels,
-                                        labels: {
-                                            style: {
-                                                colors: document.documentElement.classList.contains('dark') ? '#9ca3af' : '#6b7280',
-                                                fontSize: '12px',
-                                            },
-                                        },
-                                        axisBorder: { show: false },
-                                        axisTicks: { show: false },
+                                        categories: data.labels,
+                                        labels: { style: { colors: document.documentElement.classList.contains('dark') ? '#9ca3af' : '#6b7280', fontSize: '12px' } },
+                                        axisBorder: { show: false }, axisTicks: { show: false },
                                     },
                                     yaxis: {
                                         labels: {
-                                            style: {
-                                                colors: document.documentElement.classList.contains('dark') ? '#9ca3af' : '#6b7280',
-                                                fontSize: '12px',
-                                            },
+                                            style: { colors: document.documentElement.classList.contains('dark') ? '#9ca3af' : '#6b7280', fontSize: '12px' },
                                             formatter: function (value) {
-                                                if (value >= 1000000) {
-                                                    return (value / 1000000).toFixed(1).replace('.0', '') + ' Jt';
-                                                }
-                                                if (value >= 1000) {
-                                                    return (value / 1000).toFixed(1).replace('.0', '') + ' Rb';
-                                                }
+                                                if (value >= 1000000) { return (value / 1000000).toFixed(1).replace('.0', '') + ' Jt'; }
+                                                if (value >= 1000) { return (value / 1000).toFixed(1).replace('.0', '') + ' Rb'; }
                                                 return value;
                                             }
                                         }
                                     },
-                                    grid: {
-                                        show: true,
-                                        borderColor: document.documentElement.classList.contains('dark') ? '#374151' : '#e5e7eb',
-                                        strokeDashArray: 4,
-                                        yaxis: {
-                                            lines: {
-                                                show: true
-                                            }
-                                        },
-                                        xaxis: {
-                                            lines: {
-                                                show: false
-                                            }
-                                        }
-                                    },
-
+                                    grid: { show: true, borderColor: document.documentElement.classList.contains('dark') ? '#374151' : '#e5e7eb', strokeDashArray: 4, yaxis: { lines: { show: true } }, xaxis: { lines: { show: false } } },
                                     stroke: { curve: 'smooth', width: 2 },
                                     fill: { type: 'gradient', gradient: { opacityFrom: 0.6, opacityTo: 0.05, } },
-                                    colors: ['#dc2626', '#1d4ed8', '#16a34a'], // Omset, Laba Kotor, Profit Bersih
+                                    colors: ['#1d4ed8', '#16a34a', '#dc2626'],
                                     dataLabels: { enabled: false },
-                                    tooltip: { 
-                                        y: { formatter: (val) => 'Rp ' + val.toLocaleString('id-ID') },
-                                        theme: localStorage.getItem('theme') || 'light'
-                                    },
+                                    tooltip: { y: { formatter: (val) => 'Rp ' + val.toLocaleString('id-ID') }, theme: localStorage.getItem('theme') || 'light' },
                                     theme: { mode: localStorage.getItem('theme') || 'light' }
                                 }
                             }
                         }">
                         <h3 class="font-semibold text-lg text-gray-900 dark:text-white">Tren Laba Rugi Kuartalan</h3>
-                        {{-- Elemen untuk menampung grafik --}}
-                        <div class="mt-2 -mx-4" x-ref="chart"></div>
+                        <div class="mt-2 -mx-4" x-ref="chart" wire:ignore></div>
                         <div class="mt-4 space-y-3 border-t border-gray-200 dark:border-gray-700 pt-4">
                             @foreach($quarterlyProfitLoss as $key => $value)
                                 <div class="flex justify-between items-baseline text-sm">
@@ -290,90 +293,56 @@ new class extends Component {
                     </div>
                 </div>
 
-                {{-- Kolom Kanan Lebih Kecil (2/5) --}}
                 <div class="lg:col-span-2 space-y-8">
-                     {{-- 2. Widget: Rincian Biaya dengan Grafik Donat Modern --}}
-<div class="bg-white dark:bg-gray-800/50 shadow-sm rounded-lg p-6"
-     x-data="{
-        chart: null,
-        chartData: @entangle('costBreakdownChartData'),
-        init() {
-            this.renderChart();
-            
-            this.$watch('chartData', () => {
-                this.renderChart();
-            });
+                     {{-- 2. Widget Rincian Biaya --}}
+                    <div wire:key="cost-breakdown-chart-widget" class="bg-white dark:bg-gray-800/50 shadow-sm rounded-lg p-6"
+                         x-data="{
+                             chart: null,
+                             // --- FUNGSI renderChart() DAN getOptions() HARUS ADA DI SINI ---
+                             init() {
+                                 let initialData = {
+                                     labels: @js(array_keys($costBreakdown)),
+                                     series: @js(array_map('floatval', array_values($costBreakdown)))
+                                 };
+                                 this.renderChart(initialData);
 
-            window.addEventListener('theme-changed', () => {
-                if (this.chart) {
-                    this.chart.updateOptions({ theme: { mode: localStorage.getItem('theme') } });
-                }
-            });
-        },
-        renderChart() {
-            if (this.chart) {
-                this.chart.destroy();
-            }
-            if (this.chartData && this.chartData.series && this.chartData.series.length > 0) {
-                 this.chart = new ApexCharts(this.$refs.donut, this.getOptions());
-                 this.chart.render();
-            }
-        },
-        getOptions() {
-            return {
-                chart: { type: 'donut', height: 250 },
-                series: this.chartData.series,
-                labels: this.chartData.labels,
-                colors: ['#22c55e', '#3b82f6', '#ef4444', '#6b7280'],
-                plotOptions: {
-                    pie: {
-                        donut: {
-                            labels: {
-                                show: true,
-                                value: {
-                                    show: true,
-                                    fontSize: '22px',
-                                    fontWeight: 'bold',
-                                    formatter: function (val) {
-                                        return 'Rp ' + parseFloat(val).toLocaleString('id-ID');
+                                 window.addEventListener('quarterly-data-updated', event => {
+                                     this.renderChart(event.detail[0].costBreakdownChartData);
+                                 });
+
+                                 window.addEventListener('theme-changed', () => {
+                                    if(this.chart) {
+                                        this.chart.updateOptions({ theme: { mode: localStorage.getItem('theme') } });
                                     }
-                                },
-                                total: {
-                                    show: true,
-                                    label: 'Total Biaya',
-                                    formatter: (w) => {
-                                        const total = w.globals.seriesTotals.reduce((a, b) => a + b, 0);
-                                        return 'Rp ' + total.toLocaleString('id-ID');
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
-                legend: {
-                    position: 'bottom',
-                    horizontalAlign: 'center',
-                    formatter: function(seriesName, opts) {
-                        return [seriesName, ' - Rp ', opts.w.globals.series[opts.seriesIndex].toLocaleString('id-ID')];
-                    }
-                },
-                tooltip: { 
-                    y: { formatter: (val) => 'Rp ' + val.toLocaleString('id-ID'), title: { formatter: (seriesName) => seriesName + ':' } },
-                    fillSeriesColor: false
-                },
-                theme: { mode: localStorage.getItem('theme') || 'light' }
-            }
-        }
-     }">
-    <h3 class="font-semibold text-lg text-gray-900 dark:text-white">Proporsi Biaya</h3>
-    <div class="mt-4" x-ref="donut"></div>
-</div>
+                                 });
+                             },
+                             renderChart(data) {
+                                 if (this.chart) {
+                                     this.chart.destroy();
+                                 }
+                                 this.chart = new ApexCharts(this.$refs.donut, this.getOptions(data));
+                                 this.chart.render();
+                             },
+                             getOptions(data) {
+                                 return {
+                                     chart: { type: 'donut', height: 380 },
+                                     series: data.series,
+                                     labels: data.labels,
+                                     colors: ['#22c55e', '#3b82f6', '#ef4444', '#6b7280'],
+                                     plotOptions: { pie: { donut: { labels: { show: true, value: { show: true, fontSize: '22px', fontWeight: 'bold', formatter: function (val) { return 'Rp ' + parseFloat(val).toLocaleString('id-ID'); } }, total: { show: true, label: 'Total Biaya', formatter: (w) => { const total = w.globals.seriesTotals.reduce((a, b) => a + b, 0); return 'Rp ' + total.toLocaleString('id-ID'); } } } } } },
+                                     legend: { position: 'bottom', horizontalAlign: 'center', formatter: function(seriesName, opts) { return [seriesName, ' - Rp ', opts.w.globals.series[opts.seriesIndex].toLocaleString('id-ID')]; } },
+                                     tooltip: { y: { formatter: (val) => 'Rp ' + val.toLocaleString('id-ID'), title: { formatter: (seriesName) => seriesName + ':' } }, fillSeriesColor: false },
+                                     theme: { mode: localStorage.getItem('theme') || 'light' }
+                                 }
+                             }
+                         }">
+                        <h3 class="font-semibold text-lg text-gray-900 dark:text-white">Proporsi Biaya</h3>
+                        <div class="mt-4" x-ref="donut" wire:ignore></div>
+                    </div>
                 </div>
             </div>
-
             {{-- Bagian Bawah: Analisis Inventaris & Produk (Lebar Penuh) --}}
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                 {{-- 3. Widget: Analisis Kesehatan Inventaris --}}
                 <div class="bg-white dark:bg-gray-800/50 shadow-sm rounded-lg p-6">
                     <h3 class="font-semibold text-lg text-gray-900 dark:text-white">Kesehatan Inventaris</h3>
                     <div class="mt-4 space-y-3">
@@ -388,12 +357,8 @@ new class extends Component {
                         @endforeach
                     </div>
                 </div>
-                
-                 {{-- 4a. Widget Baru: Dead Stock Report --}}
-                 {{-- Placeholder untuk Ide #3 nanti --}}
             </div>
             
-            {{-- Widget Analisis Produk (Lebar Penuh) --}}
             <div class="bg-white dark:bg-gray-800/50 shadow-sm rounded-lg p-6">
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-6">
                     <div>
