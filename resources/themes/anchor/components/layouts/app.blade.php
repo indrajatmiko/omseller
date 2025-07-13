@@ -33,6 +33,8 @@
         </main>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    
     @livewire('notifications')
     @if(!auth()->guest() && auth()->user()->hasChangelogNotifications())
         @include('theme::partials.changelogs')

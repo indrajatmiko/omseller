@@ -208,7 +208,9 @@ new class extends Component {
             </div>
         </div>
 
-        {{-- Card Ringkasan --}}
+        {{-- ====================================================== --}}
+        {{-- CARD RINGKASAN DENGAN WARNA BARU --}}
+        {{-- ====================================================== --}}
         <div class="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
             {{-- Card Hari Ini --}}
             <div class="bg-white dark:bg-gray-800/50 shadow-sm rounded-lg p-6">
@@ -216,12 +218,21 @@ new class extends Component {
                 <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
                     @foreach(array_keys($summaryToday) as $key)
                         @if($key !== 'day')
-                        <div class="flex justify-between border-b border-gray-100 dark:border-gray-700/50 py-1">
-                            <span class="text-gray-500 dark:text-gray-400">{{ Str::title(str_replace('_', ' ', $key)) }}</span>
-                            <span class="font-medium {{ $key == 'profit' && $summaryToday[$key] < 0 ? 'text-red-500' : 'text-gray-900 dark:text-white' }}">
-                                Rp {{ number_format($summaryToday[$key], 0, ',', '.') }}
-                            </span>
-                        </div>
+                            @php
+                                $colorClass = match($key) {
+                                    'profit' => $summaryToday[$key] < 0 ? 'text-red-500' : 'text-green-600 dark:text-green-400',
+                                    'komisi_ams' => 'text-blue-600 dark:text-blue-400',
+                                    'voucher_toko' => 'text-yellow-600 dark:text-yellow-400',
+                                    'biaya_iklan' => 'text-red-600 dark:text-red-400',
+                                    default => 'text-gray-900 dark:text-white',
+                                };
+                            @endphp
+                            <div class="flex justify-between border-b border-gray-100 dark:border-gray-700/50 py-1">
+                                <span class="text-gray-500 dark:text-gray-400">{{ Str::title(str_replace('_', ' ', $key)) }}</span>
+                                <span class="font-medium {{ $colorClass }}">
+                                    Rp {{ number_format($summaryToday[$key], 0, ',', '.') }}
+                                </span>
+                            </div>
                         @endif
                     @endforeach
                 </div>
@@ -239,18 +250,26 @@ new class extends Component {
                                 $isPositiveGood = !in_array($key, ['biaya_admin', 'biaya_service', 'komisi_ams', 'voucher_toko', 'biaya_iklan', 'pengeluaran']);
                                 $difference = $currentValue - $prevValue;
 
-                                if ($difference > 0) { $changeClass = $isPositiveGood ? 'text-green-600' : 'text-red-600'; $icon = '▲'; }
-                                elseif ($difference < 0) { $changeClass = $isPositiveGood ? 'text-red-600' : 'text-green-600'; $icon = '▼'; }
-                                else { $changeClass = 'text-gray-500'; $icon = ''; }
+                                if ($difference > 0) { $changeIndicatorClass = $isPositiveGood ? 'text-green-600' : 'text-red-600'; $icon = '▲'; }
+                                elseif ($difference < 0) { $changeIndicatorClass = $isPositiveGood ? 'text-red-600' : 'text-green-600'; $icon = '▼'; }
+                                else { $changeIndicatorClass = 'text-gray-500'; $icon = ''; }
+
+                                $valueColorClass = match($key) {
+                                    'profit' => $currentValue < 0 ? 'text-red-500' : 'text-gray-900 dark:text-white',
+                                    'komisi_ams' => 'text-blue-600 dark:text-blue-400',
+                                    'voucher_toko' => 'text-yellow-600 dark:text-yellow-400',
+                                    'biaya_iklan' => 'text-red-600 dark:text-red-400',
+                                    default => 'text-gray-900 dark:text-white',
+                                };
                             @endphp
                             <div class="py-1">
                                 <div class="text-xs text-gray-500 dark:text-gray-400">{{ Str::title(str_replace('_', ' ', $key)) }}</div>
                                 <div class="flex items-baseline justify-between">
-                                    <span class="text-lg font-bold {{ $key == 'profit' && $currentValue < 0 ? 'text-red-500' : 'text-gray-900 dark:text-white' }}">
+                                    <span class="text-lg font-bold {{ $valueColorClass }}">
                                         Rp {{ number_format($currentValue, 0, ',', '.') }}
                                     </span>
                                     @if(now()->format('Y-m') == Carbon::create($selectedYear, $selectedMonth)->format('Y-m'))
-                                        <span class="ml-2 text-xs font-semibold {{ $changeClass }}">
+                                        <span class="ml-2 text-xs font-semibold {{ $changeIndicatorClass }}">
                                             {{ $icon }} {{ number_format(abs($difference), 0, ',', '.') }}
                                         </span>
                                     @endif
@@ -262,8 +281,12 @@ new class extends Component {
             </div>
         </div>
 
-        {{-- Tabel Laporan Harian --}}
-        <div class="mt-8 flow-root">
+        {{-- ====================================================== --}}
+        {{-- TABEL DAN CARD DENGAN WARNA BARU --}}
+        {{-- ====================================================== --}}
+
+        {{-- 1. Tampilan DESKTOP (md ke atas) --}}
+        <div class="mt-8 flow-root hidden md:block">
             <div class="min-w-full">
                 <div class="overflow-hidden shadow-sm ring-1 ring-black ring-opacity-5 sm:rounded-lg">
                     <table class="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
@@ -290,9 +313,9 @@ new class extends Component {
                                     </td>
                                     <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
                                         <div class="grid grid-cols-2 gap-x-4 gap-y-1">
-                                            <span>Komisi AMS</span> <span class="text-right font-medium text-gray-900 dark:text-gray-200">Rp {{ number_format($data['komisi_ams'], 0, ',', '.') }}</span>
-                                            <span>Voucher Toko</span> <span class="text-right font-medium text-gray-900 dark:text-gray-200">Rp {{ number_format($data['voucher_toko'], 0, ',', '.') }}</span>
-                                            <span>Biaya Iklan</span> <span class="text-right font-medium text-gray-900 dark:text-gray-200">Rp {{ number_format($data['biaya_iklan'], 0, ',', '.') }}</span>
+                                            <span class="text-blue-600 dark:text-blue-400">Komisi AMS</span> <span class="text-right font-medium text-blue-600 dark:text-blue-400">Rp {{ number_format($data['komisi_ams'], 0, ',', '.') }}</span>
+                                            <span class="text-yellow-600 dark:text-yellow-400">Voucher Toko</span> <span class="text-right font-medium text-yellow-600 dark:text-yellow-400">Rp {{ number_format($data['voucher_toko'], 0, ',', '.') }}</span>
+                                            <span class="text-red-600 dark:text-red-400">Biaya Iklan</span> <span class="text-right font-medium text-red-600 dark:text-red-400">Rp {{ number_format($data['biaya_iklan'], 0, ',', '.') }}</span>
                                             <span>Pengeluaran</span> <span class="text-right font-medium text-gray-900 dark:text-gray-200">Rp {{ number_format($data['pengeluaran'], 0, ',', '.') }}</span>
                                         </div>
                                     </td>
@@ -302,6 +325,59 @@ new class extends Component {
                     </table>
                 </div>
             </div>
+        </div>
+
+        {{-- 2. Tampilan MOBILE (di bawah md) --}}
+        <div class="mt-6 space-y-4 md:hidden">
+            @for ($i = 1; $i <= $daysInMonth; $i++)
+                @php $data = $reportData[$i]; @endphp
+                <div class="bg-white dark:bg-gray-800/50 shadow-sm rounded-lg overflow-hidden">
+                    <div class="px-4 py-3 flex justify-between items-center {{ $data['profit'] > 0 ? '' : ($data['profit'] < 0 ? 'bg-red-50 dark:bg-red-900/20' : 'bg-gray-50 dark:bg-gray-800') }}">
+                        <div class="flex items-center">
+                            <div class="h-8 w-8 flex-shrink-0 bg-white dark:bg-gray-700 rounded-full flex items-center justify-center shadow">
+                                <span class="font-bold text-gray-800 dark:text-white">{{ $data['day'] }}</span>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-xs text-gray-500 dark:text-gray-400">Profit Bersih</p>
+                                <p class="font-bold text-base {{ $data['profit'] < 0 ? 'text-red-500' : 'text-green-600 dark:text-green-400' }}">
+                                    Rp {{ number_format($data['profit'], 0, ',', '.') }}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="px-4 py-4 space-y-2 text-sm border-t border-gray-200 dark:border-gray-700/50">
+                        <div class="flex justify-between font-medium">
+                            <span class="text-gray-600 dark:text-gray-300">Laba Kotor</span>
+                            <span class="text-gray-900 dark:text-white">Rp {{ number_format($data['laba_kotor'], 0, ',', '.') }}</span>
+                        </div>
+                        <div class="flex justify-between text-xs">
+                            <span class="text-gray-500 dark:text-gray-400">Omset</span>
+                            <span class="text-gray-700 dark:text-gray-300">Rp {{ number_format($data['omset'], 0, ',', '.') }}</span>
+                        </div>
+                        <hr class="border-t border-dashed border-gray-200 dark:border-gray-600 my-2">
+                        <div class="flex justify-between text-xs">
+                            <span class="text-gray-500 dark:text-gray-400">Biaya Admin & Service</span>
+                            <span class="text-gray-700 dark:text-gray-300">Rp {{ number_format($data['biaya_admin'] + $data['biaya_service'], 0, ',', '.') }}</span>
+                        </div>
+                        <div class="flex justify-between text-xs">
+                            <span class="text-blue-600 dark:text-blue-400">Komisi AMS</span>
+                            <span class="font-medium text-blue-600 dark:text-blue-400">Rp {{ number_format($data['komisi_ams'], 0, ',', '.') }}</span>
+                        </div>
+                         <div class="flex justify-between text-xs">
+                            <span class="text-yellow-600 dark:text-yellow-400">Voucher Toko</span>
+                            <span class="font-medium text-yellow-600 dark:text-yellow-400">Rp {{ number_format($data['voucher_toko'], 0, ',', '.') }}</span>
+                        </div>
+                        <div class="flex justify-between text-xs">
+                            <span class="text-red-600 dark:text-red-400">Biaya Iklan</span>
+                            <span class="font-medium text-red-600 dark:text-red-400">Rp {{ number_format($data['biaya_iklan'], 0, ',', '.') }}</span>
+                        </div>
+                         <div class="flex justify-between text-xs">
+                            <span class="text-gray-500 dark:text-gray-400">Pengeluaran</span>
+                            <span class="text-gray-700 dark:text-gray-300">Rp {{ number_format($data['pengeluaran'], 0, ',', '.') }}</span>
+                        </div>
+                    </div>
+                </div>
+            @endfor
         </div>
 
     </x-app.container>
