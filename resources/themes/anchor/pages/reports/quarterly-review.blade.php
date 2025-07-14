@@ -234,10 +234,6 @@ new class extends Component {
                                 
                                 window.addEventListener('quarterly-data-updated', handleUpdate);
 
-                                this.$destroy(() => {
-                                    window.removeEventListener('quarterly-data-updated', handleUpdate);
-                                });
-
                                 window.addEventListener('theme-changed', () => {
                                     if (this.chart) {
                                         this.chart.updateOptions({ theme: { mode: localStorage.getItem('theme') } });
@@ -281,7 +277,11 @@ new class extends Component {
                                 }
                             }
                         }"
-                        x-init="renderChart(@js($profitLossChartData))">
+                        x-init="renderChart(@js($profitLossChartData))"
+                        x-destroy="
+                                // Hapus listener saat elemen dihancurkan
+                                window.removeEventListener('quarterly-data-updated', updateHandler);
+    ">
                         <h3 class="font-semibold text-lg text-gray-900 dark:text-white">Tren Laba Rugi Kuartalan</h3>
                         <div class="mt-2 -mx-4" x-ref="chart" wire:ignore></div>
                         <div class="mt-4 space-y-3 border-t border-gray-200 dark:border-gray-700 pt-4">
@@ -310,10 +310,6 @@ new class extends Component {
                                 };
 
                                 window.addEventListener('quarterly-data-updated', handleUpdate);
-
-                                this.$destroy(() => {
-                                    window.removeEventListener('quarterly-data-updated', handleUpdate);
-                                });
 
                                 window.addEventListener('theme-changed', () => {
                                     if(this.chart) {
@@ -345,7 +341,11 @@ new class extends Component {
                         x-init="renderChart({
                                 labels: @js(array_keys($costBreakdown)),
                                 series: @js(array_map('floatval', array_values($costBreakdown)))
-                            })"    
+                            })"
+                        x-destroy="
+                                // Hapus listener saat elemen dihancurkan
+                                window.removeEventListener('quarterly-data-updated', updateHandler);
+                            "
                          >
                         <h3 class="font-semibold text-lg text-gray-900 dark:text-white">Proporsi Biaya</h3>
                         <div class="mt-4" x-ref="donut" wire:ignore></div>

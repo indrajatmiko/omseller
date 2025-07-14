@@ -33,11 +33,7 @@ new class extends Component {
     
     private function getUniqueOrderHistoryQuery($userId)
     {
-        return DB::table('order_status_histories')
-            ->select('order_id', DB::raw('MIN(pickup_time) as first_pickup_time'))
-            ->where('status', 'Sudah Kirim')
-            ->whereNotNull('pickup_time')
-            ->groupBy('order_id');
+        return DB::table('order_status_histories')->select('order_id', DB::raw('MIN(pickup_time) as first_pickup_time'))->where('status', 'Sudah Kirim')->whereNotNull('pickup_time')->groupBy('order_id');
     }
 
     private function generateReportData()
@@ -46,57 +42,30 @@ new class extends Component {
         $startDate = Carbon::create($this->selectedYear, $this->selectedMonth, 1)->startOfDay();
         $endDate = $startDate->copy()->endOfMonth();
         
-        $lastDayForTable = (now()->year == $this->selectedYear && now()->month == $this->selectedMonth)
-            ? now()->subDay()->day : $startDate->daysInMonth;
+        $lastDayForTable = (now()->year == $this->selectedYear && now()->month == $this->selectedMonth) ? now()->subDay()->day : $startDate->daysInMonth;
         $this->daysInMonth = $lastDayForTable;
 
         $uniqueOshSubquery = $this->getUniqueOrderHistoryQuery($userId);
 
-        $itemBasedData = DB::table('orders as o')
-            ->where('o.user_id', $userId)
-            ->joinSub($uniqueOshSubquery, 'unique_osh', 'o.id', '=', 'unique_osh.order_id')
-            ->join('order_items as oi', 'o.id', '=', 'oi.order_id')
-            ->leftJoin(DB::raw('(SELECT variant_sku, MIN(cost_price) as cost_price FROM product_variants WHERE variant_sku IS NOT NULL AND variant_sku != \'\' GROUP BY variant_sku) as unique_pv'), 'oi.variant_sku', '=', 'unique_pv.variant_sku')
-            ->whereBetween('unique_osh.first_pickup_time', [$startDate, $endDate])
-            ->select(DB::raw('DATE(unique_osh.first_pickup_time) as date'), DB::raw('SUM(oi.subtotal) as omset'), DB::raw('SUM(oi.quantity * unique_pv.cost_price) as total_cogs'))
-            ->groupBy('date')
-            ->get()->keyBy(fn($item) => Carbon::parse($item->date)->format('Y-m-d'));
-
-        $orderBasedFees = DB::table('orders as o')
-            ->where('o.user_id', $userId)
-            ->joinSub($uniqueOshSubquery, 'unique_osh', 'o.id', '=', 'unique_osh.order_id')
-            ->join('order_payment_details as opd', 'o.id', '=', 'opd.order_id')
-            ->whereBetween('unique_osh.first_pickup_time', [$startDate, $endDate])
-            ->select(DB::raw('DATE(unique_osh.first_pickup_time) as date'), DB::raw('SUM(opd.admin_fee) as biaya_admin'), DB::raw('SUM(opd.service_fee) as biaya_service'), DB::raw('SUM(opd.ams_commission_fee) as komisi_ams'), DB::raw('SUM(opd.shop_voucher) as voucher_toko'))
-            ->groupBy('date')
-            ->get()->keyBy(fn($item) => Carbon::parse($item->date)->format('Y-m-d'));
-
-        $adsData = AdTransaction::where('user_id', $userId)->whereBetween('transaction_date', [$startDate, $endDate])
-            ->where('amount', '<', 0)->select(DB::raw('transaction_date as date'), DB::raw('SUM(ABS(amount)) as biaya_iklan'))
-            ->groupBy('date')->get()->keyBy(fn($item) => Carbon::parse($item->date)->format('Y-m-d'));
-
-        $expensesData = Expense::where('user_id', $userId)->whereBetween('transaction_date', [$startDate, $endDate])
-            ->select(DB::raw('transaction_date as date'), DB::raw('SUM(amount) as pengeluaran'))
-            ->groupBy('date')->get()->keyBy(fn($item) => Carbon::parse($item->date)->format('Y-m-d'));
+        $itemBasedData = DB::table('orders as o')->where('o.user_id', $userId)->joinSub($uniqueOshSubquery, 'unique_osh', 'o.id', '=', 'unique_osh.order_id')->join('order_items as oi', 'o.id', '=', 'oi.order_id')->leftJoin(DB::raw('(SELECT variant_sku, MIN(cost_price) as cost_price FROM product_variants WHERE variant_sku IS NOT NULL AND variant_sku != \'\' GROUP BY variant_sku) as unique_pv'), 'oi.variant_sku', '=', 'unique_pv.variant_sku')->whereBetween('unique_osh.first_pickup_time', [$startDate, $endDate])->select(DB::raw('DATE(unique_osh.first_pickup_time) as date'), DB::raw('SUM(oi.subtotal) as omset'), DB::raw('SUM(oi.quantity * unique_pv.cost_price) as total_cogs'))->groupBy('date')->get()->keyBy(fn($item) => Carbon::parse($item->date)->format('Y-m-d'));
+        $orderBasedFees = DB::table('orders as o')->where('o.user_id', $userId)->joinSub($uniqueOshSubquery, 'unique_osh', 'o.id', '=', 'unique_osh.order_id')->join('order_payment_details as opd', 'o.id', '=', 'opd.order_id')->whereBetween('unique_osh.first_pickup_time', [$startDate, $endDate])->select(DB::raw('DATE(unique_osh.first_pickup_time) as date'), DB::raw('SUM(opd.admin_fee) as biaya_admin'), DB::raw('SUM(opd.service_fee) as biaya_service'), DB::raw('SUM(opd.ams_commission_fee) as komisi_ams'), DB::raw('SUM(opd.shop_voucher) as voucher_toko'))->groupBy('date')->get()->keyBy(fn($item) => Carbon::parse($item->date)->format('Y-m-d'));
+        $adsData = AdTransaction::where('user_id', $userId)->whereBetween('transaction_date', [$startDate, $endDate])->where('amount', '<', 0)->select(DB::raw('transaction_date as date'), DB::raw('SUM(ABS(amount)) as biaya_iklan'))->groupBy('date')->get()->keyBy(fn($item) => Carbon::parse($item->date)->format('Y-m-d'));
+        $expensesData = Expense::where('user_id', $userId)->whereBetween('transaction_date', [$startDate, $endDate])->select(DB::raw('transaction_date as date'), DB::raw('SUM(amount) as pengeluaran'))->groupBy('date')->get()->keyBy(fn($item) => Carbon::parse($item->date)->format('Y-m-d'));
         
         $report = [];
         for ($i = 1; $i <= $startDate->daysInMonth; $i++) {
             $currentDate = Carbon::create($this->selectedYear, $this->selectedMonth, $i)->format('Y-m-d');
-            
             $omset = $itemBasedData[$currentDate]->omset ?? 0;
             $cogs = $itemBasedData[$currentDate]->total_cogs ?? 0;
             $laba_kotor = $omset - $cogs;
-            
             $biaya_admin = abs($orderBasedFees[$currentDate]->biaya_admin ?? 0);
             $biaya_service = abs($orderBasedFees[$currentDate]->biaya_service ?? 0);
             $komisi_ams = abs($orderBasedFees[$currentDate]->komisi_ams ?? 0);
             $voucher_toko = abs($orderBasedFees[$currentDate]->voucher_toko ?? 0);
             $biaya_iklan = $adsData[$currentDate]->biaya_iklan ?? 0;
             $pengeluaran = $expensesData[$currentDate]->pengeluaran ?? 0;
-
             $total_biaya_operasional = $biaya_admin + $biaya_service + $komisi_ams + $voucher_toko + $biaya_iklan + $pengeluaran;
             $profit = $laba_kotor - $total_biaya_operasional;
-
             $report[$i] = ['day' => str_pad($i, 2, '0', STR_PAD_LEFT), 'omset' => $omset, 'laba_kotor' => $laba_kotor, 'biaya_admin' => $biaya_admin, 'biaya_service' => $biaya_service, 'komisi_ams' => $komisi_ams, 'voucher_toko' => $voucher_toko, 'biaya_iklan' => $biaya_iklan, 'pengeluaran' => $pengeluaran, 'profit' => $profit];
         }
         
@@ -108,59 +77,50 @@ new class extends Component {
         $todayEndDate = now()->endOfDay();
         $this->summaryToday = $this->getAggregatedSummary($userId, $todayStartDate, $todayEndDate);
         
-        $this->calculateMonthToDateSummary($report); 
+        $this->calculateMonthToDateSummary($report);
+
+        // --- PERUBAHAN BARU: Kirim event dengan data untuk grafik donat bulanan ---
+        $this->dispatch('monthly-data-updated', [
+            'monthToDateCostBreakdown' => [
+                'labels' => ['COGS', 'Biaya Marketplace', 'Biaya Iklan', 'Pengeluaran Umum'],
+                'series' => [
+                    $this->summaryMonthToDate['laba_kotor'] > 0 ? ($this->summaryMonthToDate['omset'] - $this->summaryMonthToDate['laba_kotor']) : 0,
+                    ($this->summaryMonthToDate['biaya_admin'] ?? 0) + ($this->summaryMonthToDate['biaya_service'] ?? 0) + ($this->summaryMonthToDate['komisi_ams'] ?? 0) + ($this->summaryMonthToDate['voucher_toko'] ?? 0),
+                    $this->summaryMonthToDate['biaya_iklan'] ?? 0,
+                    $this->summaryMonthToDate['pengeluaran'] ?? 0
+                ]
+            ]
+        ]);
+
         return $report;
     }
 
     private function getAggregatedSummary($userId, $startDate, $endDate): array
     {
         $uniqueOshSubquery = $this->getUniqueOrderHistoryQuery($userId);
-
-        $itemBased = DB::table('orders as o')
-            ->where('o.user_id', $userId)
-            ->joinSub($uniqueOshSubquery, 'unique_osh', 'o.id', '=', 'unique_osh.order_id')
-            ->join('order_items as oi', 'o.id', '=', 'oi.order_id')
-            ->leftJoin(DB::raw('(SELECT variant_sku, MIN(cost_price) as cost_price FROM product_variants WHERE variant_sku IS NOT NULL AND variant_sku != \'\' GROUP BY variant_sku) as unique_pv'), 'oi.variant_sku', '=', 'unique_pv.variant_sku')
-            ->whereBetween('unique_osh.first_pickup_time', [$startDate, $endDate])
-            ->selectRaw('SUM(oi.subtotal) as omset, SUM(oi.quantity * unique_pv.cost_price) as total_cogs')
-            ->first();
-        
-        $orderBased = DB::table('orders as o')
-            ->where('o.user_id', $userId)
-            ->joinSub($uniqueOshSubquery, 'unique_osh', 'o.id', '=', 'unique_osh.order_id')
-            ->join('order_payment_details as opd', 'o.id', '=', 'opd.order_id')
-            ->whereBetween('unique_osh.first_pickup_time', [$startDate, $endDate])
-            ->selectRaw('SUM(opd.admin_fee) as biaya_admin, SUM(opd.service_fee) as biaya_service, SUM(opd.ams_commission_fee) as komisi_ams, SUM(opd.shop_voucher) as voucher_toko')
-            ->first();
-
+        $itemBased = DB::table('orders as o')->where('o.user_id', $userId)->joinSub($uniqueOshSubquery, 'unique_osh', 'o.id', '=', 'unique_osh.order_id')->join('order_items as oi', 'o.id', '=', 'oi.order_id')->leftJoin(DB::raw('(SELECT variant_sku, MIN(cost_price) as cost_price FROM product_variants WHERE variant_sku IS NOT NULL AND variant_sku != \'\' GROUP BY variant_sku) as unique_pv'), 'oi.variant_sku', '=', 'unique_pv.variant_sku')->whereBetween('unique_osh.first_pickup_time', [$startDate, $endDate])->selectRaw('SUM(oi.subtotal) as omset, SUM(oi.quantity * unique_pv.cost_price) as total_cogs')->first();
+        $orderBased = DB::table('orders as o')->where('o.user_id', $userId)->joinSub($uniqueOshSubquery, 'unique_osh', 'o.id', '=', 'unique_osh.order_id')->join('order_payment_details as opd', 'o.id', '=', 'opd.order_id')->whereBetween('unique_osh.first_pickup_time', [$startDate, $endDate])->selectRaw('SUM(opd.admin_fee) as biaya_admin, SUM(opd.service_fee) as biaya_service, SUM(opd.ams_commission_fee) as komisi_ams, SUM(opd.shop_voucher) as voucher_toko')->first();
         $ads = AdTransaction::where('user_id', $userId)->whereBetween('transaction_date', [$startDate, $endDate])->where('amount', '<', 0)->sum('amount');
         $expenses = Expense::where('user_id', $userId)->whereBetween('transaction_date', [$startDate, $endDate])->sum('amount');
-        
         $laba_kotor = ($itemBased->omset ?? 0) - ($itemBased->total_cogs ?? 0);
         $biaya_admin = abs($orderBased->biaya_admin ?? 0);
         $biaya_service = abs($orderBased->biaya_service ?? 0);
         $komisi_ams = abs($orderBased->komisi_ams ?? 0);
         $voucher_toko = abs($orderBased->voucher_toko ?? 0);
         $biaya_iklan = abs($ads ?? 0);
-        
         $total_biaya = $biaya_admin + $biaya_service + $komisi_ams + $voucher_toko + $biaya_iklan + $expenses;
-
         return ['omset' => $itemBased->omset ?? 0, 'laba_kotor' => $laba_kotor, 'biaya_admin' => $biaya_admin, 'biaya_service' => $biaya_service, 'komisi_ams' => $komisi_ams, 'voucher_toko' => $voucher_toko, 'biaya_iklan' => $biaya_iklan, 'pengeluaran' => $expenses, 'profit' => $laba_kotor - $total_biaya];
     }
     
-    // --- SEMUA METODE HELPER SEKARANG ADA DI SINI ---
     private function calculateMonthToDateSummary(array $report): void
     {
         $yesterday = now()->subDay()->day;
         $monthToDate = $this->getEmptySummary();
-        
         if (now()->format('Y-m') == Carbon::create($this->selectedYear, $this->selectedMonth)->format('Y-m')) {
             for ($i = 1; $i <= $yesterday; $i++) {
                 if (isset($report[$i])) {
                     foreach ($report[$i] as $key => $value) {
-                        if ($key !== 'day') {
-                            $monthToDate[$key] += $value;
-                        }
+                        if ($key !== 'day') $monthToDate[$key] += $value;
                     }
                 }
             }
@@ -175,19 +135,10 @@ new class extends Component {
     
     public function with(): array
     {
-        $availableYears = Order::where('user_id', auth()->id())
-            ->join('order_status_histories', 'orders.id', '=', 'order_status_histories.order_id')
-            ->whereNotNull('order_status_histories.pickup_time')->where('order_status_histories.status', 'Sudah Kirim')
-            ->select(DB::raw('YEAR(order_status_histories.pickup_time) as year'))
-            ->distinct()->orderBy('year', 'desc')->get()->pluck('year');
-        
+        $availableYears = Order::where('user_id', auth()->id())->join('order_status_histories', 'orders.id', '=', 'order_status_histories.order_id')->whereNotNull('order_status_histories.pickup_time')->where('order_status_histories.status', 'Sudah Kirim')->select(DB::raw('YEAR(order_status_histories.pickup_time) as year'))->distinct()->orderBy('year', 'desc')->get()->pluck('year');
+        if ($availableYears->isEmpty()) { $availableYears = collect([now()->year]); }
         $availableMonths = collect(range(1, 12))->mapWithKeys(fn ($m) => [Carbon::create(null, $m)->month => Carbon::create(null, $m)->isoFormat('MMMM')]);
-        
-        return [
-            'reportData' => $this->generateReportData(),
-            'availableYears' => $availableYears,
-            'availableMonths' => $availableMonths,
-        ];
+        return ['reportData' => $this->generateReportData(), 'availableYears' => $availableYears, 'availableMonths' => $availableMonths];
     }
 }; ?>
 
@@ -239,9 +190,123 @@ new class extends Component {
             </div>
             
             {{-- Card Bulan Ini s/d Kemarin dengan Perbandingan --}}
-            <div class="bg-white dark:bg-gray-800/50 shadow-sm rounded-lg p-6">
+            {{-- PERUBAHAN: Card Bulan Ini s/d Kemarin dengan Grafik Donat --}}
+<div wire:key="month-to-date-summary" class="bg-white dark:bg-gray-800/50 shadow-sm rounded-lg p-6">
                 <h4 class="font-semibold text-gray-900 dark:text-white">Awal Bulan s/d Kemarin</h4>
-                <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+                <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                    {{-- Kolom Kiri: Grafik Donat --}}
+                    <div x-data="{
+                            chart: null,
+                            init() {
+                                // Definisikan handler di luar agar bisa diakses oleh cleanup
+                                const handleUpdate = (event) => {
+                                    // Gunakan $el untuk merujuk ke elemen saat ini
+                                    // Ini cara aman untuk memastikan kita tidak memanggil renderChart jika elemen sudah hilang
+                                    if (this.$el) {
+                                        this.renderChart(event.detail[0].monthToDateChartData);
+                                    }
+                                };
+
+                                // Render awal
+                                let initialData = {
+                                    labels: @js(['Omset', 'Biaya Iklan', 'Biaya Marketplace', 'Pengeluaran', 'Komisi AMS', 'Voucher Toko']),
+                                    series: @js([
+                                        $summaryMonthToDate['omset'] ?? 0,
+                                        $summaryMonthToDate['biaya_iklan'] ?? 0,
+                                        ($summaryMonthToDate['biaya_admin'] ?? 0) + ($summaryMonthToDate['biaya_service'] ?? 0),
+                                        $summaryMonthToDate['pengeluaran'] ?? 0,
+                                        $summaryMonthToDate['komisi_ams'] ?? 0,
+                                        $summaryMonthToDate['voucher_toko'] ?? 0
+                                    ])
+                                };
+                                this.renderChart(initialData);
+
+                                // Pasang listener
+                                window.addEventListener('monthly-data-updated', handleUpdate);
+                            },
+                            renderChart(data) {
+                                if (this.chart) { this.chart.destroy(); }
+                                if(data && data.series && data.series.some(v => v > 0)) {
+                                    this.chart = new ApexCharts(this.$refs.donut, this.getOptions(data));
+                                    this.chart.render();
+                                }
+                            },
+                            getOptions(data) {
+                                return {
+                                    chart: { type: 'donut', height: 380 },
+                                    series: data.series,
+                                    labels: data.labels,
+                                    colors: ['#16a34a', '#ef4444', '#6b7280', '#9ca3af', '#3b82f6', '#f59e0b'],
+                                    
+                                    dataLabels: {
+                                        enabled: true,
+                                        formatter: function (val, opts) {
+                                            return val.toFixed(1) + '%'
+                                        },
+                                        style: {
+                                            fontSize: '11px',
+                                            fontWeight: 'bold',
+                                            colors: ['#fff']
+                                        },
+                                        dropShadow: {
+                                            enabled: true,
+                                            top: 1,
+                                            left: 1,
+                                            blur: 1,
+                                            color: '#000',
+                                            opacity: 0.45
+                                        }
+                                    },
+                                    
+                                    legend: { 
+                                        show: true,
+                                        position: 'bottom',
+                                        horizontalAlign: 'center',
+                                        fontSize: '12px',
+                                        itemMargin: { horizontal: 5, vertical: 2 },
+                                    },
+                                    plotOptions: { 
+                                        pie: { 
+                                            donut: { 
+                                                labels: { 
+                                                    show: true, 
+                                                    value: {
+                                                        show: true,
+                                                        formatter: function (val) {
+                                                            return 'Rp ' + parseFloat(val).toLocaleString('id-ID');
+                                                        }
+                                                    },
+                                                    total: { 
+                                                        show: true, 
+                                                        label: 'Total Omset', 
+                                                        formatter: (w) => 'Rp ' + w.globals.series[0].toLocaleString('id-ID')
+                                                    } 
+                                                } 
+                                            } 
+                                        } 
+                                    },
+                                    tooltip: { y: { formatter: (val) => 'Rp ' + parseFloat(val).toLocaleString('id-ID') } },
+                                    theme: { mode: localStorage.getItem('theme') || 'light' }
+                                }
+                            }
+                        }" x-init="renderChart({
+                            labels: @js(['Omset', 'Biaya Iklan', 'Biaya Marketplace', 'Pengeluaran', 'Komisi AMS', 'Voucher Toko']),
+                            series: @js([
+                                $summaryMonthToDate['omset'] ?? 0,
+                                $summaryMonthToDate['biaya_iklan'] ?? 0,
+                                ($summaryMonthToDate['biaya_admin'] ?? 0) + ($summaryMonthToDate['biaya_service'] ?? 0),
+                                $summaryMonthToDate['pengeluaran'] ?? 0,
+                                $summaryMonthToDate['komisi_ams'] ?? 0,
+                                $summaryMonthToDate['voucher_toko'] ?? 0
+                            ])
+                        })"
+                        x-destroy="
+                            window.removeEventListener('monthly-data-updated', updateHandler);
+                        ">
+                        <div x-ref="donut" wire:ignore></div>
+                    </div>
+                    {{-- Kolom Kanan: Detail Angka & Perbandingan --}}
+                    <div class="space-y-2">
                     @foreach(array_keys($summaryMonthToDate) as $key)
                         @if($key !== 'day')
                             @php
