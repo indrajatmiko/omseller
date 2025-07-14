@@ -77,7 +77,7 @@
                     <x-app.sidebar-dropdown text="Laporan" icon="phosphor-arrows-clockwise" id="reports_dropdown" :active="(Request::is('reports'))" :open="(Request::is('reports/daily-shipments') || Request::is('reports/profit-loss') || Request::is('reports/quarterly-review')) ? '1' : '0'">
                         <x-app.sidebar-link href="/reports/daily-shipments" icon="phosphor-package" :active="(Request::is('reports/daily-shipments'))">Barang Keluar</x-app.sidebar-link>
                         <x-app.sidebar-link href="/reports/profit-loss" icon="phosphor-package" :active="(Request::is('reports/profit-loss'))">Laba Rugi</x-app.sidebar-link>
-                        <x-app.sidebar-link href="/reports/quarterly-review" icon="phosphor-package" :active="(Request::is('reports/quarterly-review'))">Quarter</x-app.sidebar-link>
+                        <x-app.sidebar-link href="/reports/quarterly-review" icon="phosphor-package" :active="(Request::is('reports/quarterly-review'))">Kuartalan</x-app.sidebar-link>
                     </x-app.sidebar-dropdown>
                     
                     <x-app.sidebar-link onclick="event.preventDefault(); new FilamentNotification().title('Modify this button inside of sidebar.blade.php').send()" icon="phosphor-pencil-line" active="false">Produk - Hitung Margin</x-app.sidebar-link>

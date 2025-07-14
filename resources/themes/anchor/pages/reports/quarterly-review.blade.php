@@ -226,27 +226,31 @@ new class extends Component {
                     <div wire:key="profit-loss-chart-widget" class="bg-white dark:bg-gray-800/50 shadow-sm rounded-lg p-6"
                         x-data="{
                             chart: null,
-                            // --- FUNGSI renderChart() DAN getOptions() HARUS ADA DI SINI ---
+                            // Fungsi init sekarang hanya memasang listener
                             init() {
-                                let initialData = @js($profitLossChartData);
-                                this.renderChart(initialData);
-                                
-                                window.addEventListener('quarterly-data-updated', event => {
+                                const handleUpdate = (event) => {
                                     this.renderChart(event.detail[0].profitLossChartData);
+                                };
+                                
+                                window.addEventListener('quarterly-data-updated', handleUpdate);
+
+                                this.$destroy(() => {
+                                    window.removeEventListener('quarterly-data-updated', handleUpdate);
                                 });
 
                                 window.addEventListener('theme-changed', () => {
-                                    if(this.chart) {
+                                    if (this.chart) {
                                         this.chart.updateOptions({ theme: { mode: localStorage.getItem('theme') } });
                                     }
                                 });
                             },
                             renderChart(data) {
-                                if (this.chart) {
-                                    this.chart.destroy();
+                                if (this.chart) { this.chart.destroy(); }
+                                // Tambahkan pengaman jika data tidak valid
+                                if (data && data.series && data.labels) {
+                                    this.chart = new ApexCharts(this.$refs.chart, this.getOptions(data));
+                                    this.chart.render();
                                 }
-                                this.chart = new ApexCharts(this.$refs.chart, this.getOptions(data));
-                                this.chart.render();
                             },
                             getOptions(data) {
                                 return {
@@ -276,7 +280,8 @@ new class extends Component {
                                     theme: { mode: localStorage.getItem('theme') || 'light' }
                                 }
                             }
-                        }">
+                        }"
+                        x-init="renderChart(@js($profitLossChartData))">
                         <h3 class="font-semibold text-lg text-gray-900 dark:text-white">Tren Laba Rugi Kuartalan</h3>
                         <div class="mt-2 -mx-4" x-ref="chart" wire:ignore></div>
                         <div class="mt-4 space-y-3 border-t border-gray-200 dark:border-gray-700 pt-4">
@@ -298,31 +303,32 @@ new class extends Component {
                     <div wire:key="cost-breakdown-chart-widget" class="bg-white dark:bg-gray-800/50 shadow-sm rounded-lg p-6"
                          x-data="{
                              chart: null,
-                             // --- FUNGSI renderChart() DAN getOptions() HARUS ADA DI SINI ---
-                             init() {
-                                 let initialData = {
-                                     labels: @js(array_keys($costBreakdown)),
-                                     series: @js(array_map('floatval', array_values($costBreakdown)))
-                                 };
-                                 this.renderChart(initialData);
+                            // Fungsi init sekarang hanya memasang listener
+                            init() {
+                                const handleUpdate = (event) => {
+                                    this.renderChart(event.detail[0].costBreakdownChartData);
+                                };
 
-                                 window.addEventListener('quarterly-data-updated', event => {
-                                     this.renderChart(event.detail[0].costBreakdownChartData);
-                                 });
+                                window.addEventListener('quarterly-data-updated', handleUpdate);
 
-                                 window.addEventListener('theme-changed', () => {
+                                this.$destroy(() => {
+                                    window.removeEventListener('quarterly-data-updated', handleUpdate);
+                                });
+
+                                window.addEventListener('theme-changed', () => {
                                     if(this.chart) {
                                         this.chart.updateOptions({ theme: { mode: localStorage.getItem('theme') } });
                                     }
-                                 });
-                             },
-                             renderChart(data) {
-                                 if (this.chart) {
-                                     this.chart.destroy();
-                                 }
-                                 this.chart = new ApexCharts(this.$refs.donut, this.getOptions(data));
-                                 this.chart.render();
-                             },
+                                });
+                            },
+                            renderChart(data) {
+                                if (this.chart) { this.chart.destroy(); }
+                                // Tambahkan pengaman jika data tidak valid
+                                if (data && data.series && data.labels) {
+                                    this.chart = new ApexCharts(this.$refs.donut, this.getOptions(data));
+                                    this.chart.render();
+                                }
+                            },
                              getOptions(data) {
                                  return {
                                      chart: { type: 'donut', height: 380 },
@@ -335,7 +341,12 @@ new class extends Component {
                                      theme: { mode: localStorage.getItem('theme') || 'light' }
                                  }
                              }
-                         }">
+                         }"
+                        x-init="renderChart({
+                                labels: @js(array_keys($costBreakdown)),
+                                series: @js(array_map('floatval', array_values($costBreakdown)))
+                            })"    
+                         >
                         <h3 class="font-semibold text-lg text-gray-900 dark:text-white">Proporsi Biaya</h3>
                         <div class="mt-4" x-ref="donut" wire:ignore></div>
                     </div>
