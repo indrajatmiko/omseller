@@ -209,14 +209,16 @@ new class extends Component {
 
                                 // Render awal
                                 let initialData = {
-                                    labels: @js(['Omset', 'Biaya Iklan', 'Biaya Marketplace', 'Pengeluaran', 'Komisi AMS', 'Voucher Toko']),
+                                    labels: @js(['Omset', 'Laba Kotor', 'Biaya Iklan', 'Biaya Marketplace', 'Pengeluaran', 'Komisi AMS', 'Voucher Toko', 'Profit']),
                                     series: @js([
                                         $summaryMonthToDate['omset'] ?? 0,
+                                        $summaryMonthToDate['laba_kotor'] ?? 0,
                                         $summaryMonthToDate['biaya_iklan'] ?? 0,
                                         ($summaryMonthToDate['biaya_admin'] ?? 0) + ($summaryMonthToDate['biaya_service'] ?? 0),
                                         $summaryMonthToDate['pengeluaran'] ?? 0,
                                         $summaryMonthToDate['komisi_ams'] ?? 0,
-                                        $summaryMonthToDate['voucher_toko'] ?? 0
+                                        $summaryMonthToDate['voucher_toko'] ?? 0,
+                                        $summaryMonthToDate['profit'] ?? 0
                                     ])
                                 };
                                 this.renderChart(initialData);
@@ -236,7 +238,7 @@ new class extends Component {
                                     chart: { type: 'donut', height: 380 },
                                     series: data.series,
                                     labels: data.labels,
-                                    colors: ['#16a34a', '#ef4444', '#6b7280', '#9ca3af', '#3b82f6', '#f59e0b'],
+                                    colors: ['#000', '#6b7280', '#b91c1c', '#ee4d2d', '#9ca3af', '#3b82f6', '#f59e0b', '#16a34a'],
                                     
                                     dataLabels: {
                                         enabled: true,
@@ -290,14 +292,16 @@ new class extends Component {
                                 }
                             }
                         }" x-init="renderChart({
-                            labels: @js(['Omset', 'Biaya Iklan', 'Biaya Marketplace', 'Pengeluaran', 'Komisi AMS', 'Voucher Toko']),
+                            labels: @js(['Omset', 'Laba Kotor', 'Biaya Iklan', 'Biaya Marketplace', 'Pengeluaran', 'Komisi AMS', 'Voucher Toko', 'Profit']),
                             series: @js([
                                 $summaryMonthToDate['omset'] ?? 0,
+                                $summaryMonthToDate['laba_kotor'] ?? 0,
                                 $summaryMonthToDate['biaya_iklan'] ?? 0,
                                 ($summaryMonthToDate['biaya_admin'] ?? 0) + ($summaryMonthToDate['biaya_service'] ?? 0),
                                 $summaryMonthToDate['pengeluaran'] ?? 0,
                                 $summaryMonthToDate['komisi_ams'] ?? 0,
-                                $summaryMonthToDate['voucher_toko'] ?? 0
+                                $summaryMonthToDate['voucher_toko'] ?? 0,
+                                $summaryMonthToDate['profit'] ?? 0
                             ])
                         })"
                         x-destroy="
