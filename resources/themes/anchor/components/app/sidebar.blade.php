@@ -55,10 +55,10 @@
                         <x-app.sidebar-link href="/datacenter-ikuti" icon="phosphor-storefront" :active="(Request::is('datacenter-ikuti'))">Tokopedia</x-app.sidebar-link>
                     </x-app.sidebar-dropdown>
                     
-                    <x-app.sidebar-dropdown text="Keuangan" icon="phosphor-arrows-clockwise" id="keuangans_dropdown" :active="(Request::is('keuangans'))" :open="(Request::is('finances/expenses') || Request::is('sinkronisasi/produk-shopee') || Request::is('datacenter-ikuti')) ? '1' : '0'">
+                    <x-app.sidebar-dropdown text="Keuangan" icon="phosphor-arrows-clockwise" id="keuangans_dropdown" :active="(Request::is('keuangans'))" :open="(Request::is('finances/expenses') || Request::is('purchases*') || Request::is('datacenter-ikuti')) ? '1' : '0'">
                         <x-app.sidebar-link href="/finances/expenses" icon="phosphor-package" :active="(Request::is('finances/expenses'))">Pengeluaran</x-app.sidebar-link>
-                        <x-app.sidebar-link href="/sinkronisasi/pesanan-shopee" icon="phosphor-trolley-suitcase" :active="(Request::is('sinkronisasi/pesanan-shopee'))">Pesanan</x-app.sidebar-link>
-                        <x-app.sidebar-link href="/datacenter-ikuti" icon="phosphor-storefront" :active="(Request::is('datacenter-ikuti'))">Tokopedia</x-app.sidebar-link>
+                        <x-app.sidebar-link href="/purchases" icon="phosphor-trolley-suitcase" :active="(Request::is('purchases*'))">Purchase Order</x-app.sidebar-link>
+                        <x-app.sidebar-link href="/datacenter-ikuti" icon="phosphor-storefront" :active="(Request::is('datacenter-ikuti'))">-</x-app.sidebar-link>
                     </x-app.sidebar-dropdown>
                     
                     <x-app.sidebar-dropdown text="Pelanggan" icon="phosphor-arrows-clockwise" id="pelangans_dropdown" :active="(Request::is('pelangans'))" :open="(Request::is('customer/name-update') || Request::is('customer/detail') || Request::is('customer/segmentation')) ? '1' : '0'">
@@ -74,10 +74,11 @@
                         <x-app.sidebar-link href="/inventory/stock-takes" icon="phosphor-trolley-suitcase" :active="(Request::is('inventory/stock-takes*'))">STOK Opname</x-app.sidebar-link>
                     </x-app.sidebar-dropdown>
                     
-                    <x-app.sidebar-dropdown text="Laporan" icon="phosphor-arrows-clockwise" id="reports_dropdown" :active="(Request::is('reports'))" :open="(Request::is('reports/daily-shipments') || Request::is('reports/profit-loss') || Request::is('reports/quarterly-review')) ? '1' : '0'">
+                    <x-app.sidebar-dropdown text="Laporan" icon="phosphor-arrows-clockwise" id="reports_dropdown" :active="(Request::is('reports'))" :open="(Request::is('reports/daily-shipments') || Request::is('reports/profit-loss') || Request::is('reports/quarterly-review') || Request::is('reports/shipping-anomaly')) ? '1' : '0'">
                         <x-app.sidebar-link href="/reports/daily-shipments" icon="phosphor-package" :active="(Request::is('reports/daily-shipments'))">Barang Keluar</x-app.sidebar-link>
                         <x-app.sidebar-link href="/reports/profit-loss" icon="phosphor-package" :active="(Request::is('reports/profit-loss'))">Laba Rugi</x-app.sidebar-link>
                         <x-app.sidebar-link href="/reports/quarterly-review" icon="phosphor-package" :active="(Request::is('reports/quarterly-review'))">Kuartalan</x-app.sidebar-link>
+                        <x-app.sidebar-link href="/reports/shipping-anomaly" icon="phosphor-package" :active="(Request::is('reports/shipping-anomaly'))">Anomali Ongkir</x-app.sidebar-link>
                     </x-app.sidebar-dropdown>
                     
                     <x-app.sidebar-link onclick="event.preventDefault(); new FilamentNotification().title('Modify this button inside of sidebar.blade.php').send()" icon="phosphor-pencil-line" active="false">Produk - Hitung Margin</x-app.sidebar-link>

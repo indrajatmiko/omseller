@@ -31,7 +31,6 @@ new class extends Component {
             ->orderBy('name')
             ->pluck('name', 'id')
             ->all();
-        // Tidak perlu memanggil loadSkuDataForCurrentPage di sini karena `with()` akan menanganinya
     }
 
     public function updatedSearch(): void
@@ -63,12 +62,9 @@ new class extends Component {
 
     protected function loadSkuDataForCurrentPage(): void
     {
-        // Fungsi ini sekarang tidak lagi memanggil getPaginatedSkus sendiri
-        // karena datanya sudah tersedia dari `with()`
         $paginatedSkus = $this->getPaginatedSkus();
         $variantsBySku = $this->getVariantsForSkus($paginatedSkus->pluck('variant_sku')->all());
         
-        // Kosongkan array skuData agar tidak ada data lama dari halaman sebelumnya
         $this->skuData = [];
 
         foreach ($paginatedSkus as $skuItem) {
@@ -101,7 +97,6 @@ new class extends Component {
         }
 
         $componentPrices = ProductVariant::whereIn('variant_sku', $compositions->pluck('component_sku')->unique())
-            // ->where('user_id', auth()->id())
             ->pluck('cost_price', 'variant_sku');
 
         $totalSuggestedCost = 0;
@@ -187,52 +182,65 @@ new class extends Component {
     private function getPaginatedSkus()
     {
         return ProductVariant::query()
-            // JOIN ke tabel produk untuk mendapatkan category_id
             ->join('products', 'product_variants.product_id', '=', 'products.id')
-            // LEFT JOIN agar produk tanpa kategori tetap muncul
             ->leftJoin('product_categories', 'products.product_category_id', '=', 'product_categories.id')
-            // Filter berdasarkan user_id di tabel produk
             ->where('products.user_id', auth()->id())
-            // Filter SKU yang valid, pastikan nama kolom spesifik
             ->where(function($q) {
                 $q->where('product_variants.variant_sku', '!=', '')->whereNotNull('product_variants.variant_sku');
             })
             ->when($this->search, function($q) {
-                // Pencarian bisa diperluas untuk mencari di nama produk atau kategori juga
                 $q->where('product_variants.variant_sku', 'like', '%' . $this->search . '%')
                   ->orWhere('products.product_name', 'like', '%' . $this->search . '%')
                   ->orWhere('product_categories.name', 'like', '%' . $this->search . '%');
             })
-            // Pilih kolom variant_sku secara eksplisit
             ->select('product_variants.variant_sku')
             ->distinct()
-            // Urutkan berdasarkan nama kategori (NULLs akan di awal), lalu berdasarkan SKU
             ->orderByRaw('ISNULL(product_categories.name), product_categories.name ASC, product_variants.variant_sku ASC')
-            ->paginate(50);
+            // PERUBAHAN 4: Mengubah paginasi dari 50 menjadi 25
+            ->paginate(25);
     }
     
-    // PERBAIKAN KRUSIAL ADA DI SINI
     public function with(): array
     {
-        // 1. Simpan state form yang sedang diedit (jika ada)
         $editingData = null;
         if ($this->editingSku && isset($this->skuData[$this->editingSku])) {
             $editingData = $this->skuData[$this->editingSku];
         }
 
-        // 2. Muat data baru untuk halaman saat ini. Ini akan menimpa $this->skuData
-        $this->loadSkuDataForCurrentPage();
+        // Muat data untuk halaman ini. Ini akan menimpa $this->skuData.
+        $paginatedSkus = $this->getPaginatedSkus();
+        $variantsBySku = $this->getVariantsForSkus($paginatedSkus->pluck('variant_sku')->all());
+        
+        $this->skuData = [];
 
-        // 3. Pulihkan state form yang sedang diedit
+        foreach ($paginatedSkus as $skuItem) {
+            $sku = $skuItem->variant_sku;
+            $firstVariant = $variantsBySku[$sku]->first() ?? null;
+            $firstProduct = $firstVariant->product ?? null;
+
+            if ($firstVariant && $firstProduct) {
+                $this->skuData[$sku] = [
+                    'cost_price_raw'      => $firstVariant->cost_price ?? 0,
+                    'warehouse_stock_raw' => $firstVariant->warehouse_stock ?? 0,
+                    'product_category_id' => $firstProduct->product_category_id,
+                    'status'              => $firstProduct->status,
+                    'sku_type'            => $firstVariant->sku_type,
+                    'suggested_cost_price' => null,
+                ];
+
+                if ($firstVariant->sku_type === 'gabungan') {
+                    $this->skuData[$sku]['suggested_cost_price'] = $this->calculateSuggestedPrice($sku);
+                }
+            }
+        }
+
         if ($this->editingSku && $editingData) {
             $this->skuData[$this->editingSku] = $editingData;
         }
         
-        $paginatedSkus = $this->getPaginatedSkus();
-        
         return [
             'skus' => $paginatedSkus,
-            'variantsBySku' => $this->getVariantsForSkus($paginatedSkus->pluck('variant_sku')->all()),
+            'variantsBySku' => $variantsBySku,
         ];
     }
 };
@@ -249,37 +257,39 @@ new class extends Component {
                     description="Kelola data SKU secara terpusat. Klik pada baris untuk mengedit."
                     :border="true" />
 
-                <div class="mt-6 flex justify-between items-center">
+                <div class="mt-6 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
                     <input type="search" wire:model.live.debounce.300ms="search" class="block w-full md:w-1/3 rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 py-2 px-3 text-sm" placeholder="Cari SKU...">
-                    <a href="{{ route('inventory.categories') }}" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700">
+                    <a href="{{ route('inventory.categories') }}" class="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700">
                         Kelola Kategori
                     </a>
                 </div>
 
-                <div class="mt-4 flex flex-col">
+                <div class="mt-4 flow-root">
                     <div class="-my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
                         <div class="py-2 align-middle inline-block min-w-full sm:px-6 lg:px-8">
-                            <div class="shadow overflow-hidden border-b border-gray-200 dark:border-gray-700 sm:rounded-lg">
-                                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                                    <thead class="bg-gray-50 dark:bg-gray-800">
-                                        <tr>
-                                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-2/3">SKU</th>
-                                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Harga Modal</th>
-                                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Kategori</th>
-                                            <th scope="col" class="relative px-6 py-3"><span class="sr-only">Edit</span></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-                                        @forelse($skus as $skuItem)
-                                            @php 
-                                                $sku = $skuItem->variant_sku; 
-                                                $currentVariants = $variantsBySku[$sku] ?? collect();
-                                            @endphp
-                                            
-                                            @if(isset($skuData[$sku]))
-                                                @if ($editingSku === $sku)
-                                                    <tr wire:key="editor-{{ $sku }}" class="bg-gray-50 dark:bg-gray-800/50">
-                                                        <td colspan="4" class="px-4 py-6">
+                            <table class="min-w-full">
+                                <thead class="hidden md:table-header-group bg-gray-50 dark:bg-gray-800">
+                                    <tr>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-1/3">SKU</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Harga Modal</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Stok Gudang</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Jenis SKU</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Kategori</th>
+                                        <th scope="col" class="relative px-6 py-3"><span class="sr-only">Edit</span></th>
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white dark:bg-gray-900 md:divide-y md:divide-gray-200 md:dark:divide-gray-700">
+                                    @forelse($skus as $skuItem)
+                                        @php 
+                                            $sku = $skuItem->variant_sku; 
+                                            $currentVariants = $variantsBySku[$sku] ?? collect();
+                                        @endphp
+                                        
+                                        @if(isset($skuData[$sku]))
+                                            @if ($editingSku === $sku)
+                                                <tr wire:key="editor-{{ $sku }}">
+                                                    <td colspan="6" class="p-2 md:p-0">
+                                                        <div class="p-4 rounded-lg bg-gray-50 dark:bg-gray-800/50 shadow-lg border border-indigo-300 dark:border-indigo-600">
                                                             <div class="mb-4 pb-4 border-b border-gray-200 dark:border-gray-700">
                                                                 <h3 class="text-lg font-bold text-gray-900 dark:text-white">Mengedit SKU: {{ $sku }}</h3>
                                                                 @if($variantName = $currentVariants->first()->variant_name)
@@ -287,6 +297,7 @@ new class extends Component {
                                                                 @endif
                                                             </div>
                                                             <div class="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4">
+                                                                {{-- Form fields... --}}
                                                                 <div class="space-y-4">
                                                                     <div>
                                                                         <label for="cost_price-{{$sku}}" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Harga Modal</label>
@@ -325,10 +336,7 @@ new class extends Component {
                                                                 <div class="space-y-4">
                                                                     <div>
                                                                         <label for="sku_type-{{$sku}}" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Jenis SKU</label>
-                                                                        {{-- PERBAIKAN: Hapus AlpineJS, biarkan hook updatedSkuData() yang bekerja --}}
-                                                                        <select id="sku_type-{{$sku}}" 
-                                                                                wire:model.live="skuData.{{$sku}}.sku_type" 
-                                                                                class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm sm:text-sm">
+                                                                        <select id="sku_type-{{$sku}}" wire:model.live="skuData.{{$sku}}.sku_type" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm sm:text-sm">
                                                                             <option value="mandiri">Mandiri</option>
                                                                             <option value="gabungan">Gabungan</option>
                                                                         </select>
@@ -339,43 +347,78 @@ new class extends Component {
                                                                     </div>
                                                                 </div>
                                                             </div>
-                                                        </td>
-                                                    </tr>
-                                                @else
-                                                    <tr wire:key="row-{{ $sku }}" wire:click="editSku('{{ $sku }}')" class="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                                                        <td class="px-6 py-4 whitespace-nowrap">
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            @else
+                                                <tr wire:key="row-{{ $sku }}" wire:click="editSku('{{ $sku }}')" class="block md:table-row mb-4 md:mb-0 bg-white dark:bg-gray-900 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                                    {{-- SKU (Card Header on Mobile) --}}
+                                                    <td class="block md:table-cell p-4 md:px-6 md:py-4 md:align-middle md:whitespace-nowrap">
+                                                        <div class="flex justify-between items-start">
                                                             <div>
                                                                 <p class="font-bold text-gray-900 dark:text-white">{{ $sku }}</p>
                                                                 <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" title="{{ $currentVariants->pluck('product.product_name')->implode(', ') }}">
                                                                     Digunakan di {{ $currentVariants->count() }} produk
                                                                 </p>
                                                             </div>
-                                                        </td>
-                                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                                            {{ $productCategories[$skuData[$sku]['product_category_id']] ?? '-' }}
-                                                        </td>
-                                                        <td class="px-6 py-4 whitespace-nowrap">
-                                                            <span class="text-sm text-gray-800 dark:text-gray-200">
-                                                                Rp {{ number_format($skuData[$sku]['cost_price_raw'] ?? 0, 0, ',', '.') }}
-                                                            </span>
-                                                        </td>
-                                                        <td class="px-6 py-4 whitespace-nowrap text-right">
-                                                            <span class="text-xs text-gray-400">Klik untuk edit</span>
-                                                        </td>
-                                                    </tr>
-                                                @endif
+                                                            <div class="md:hidden">
+                                                                <span class="inline-flex items-center px-3 py-1 border border-gray-300 dark:border-gray-600 text-xs font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">Edit</span>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    {{-- Other data with labels for mobile --}}
+                                                    <td class="block md:table-cell px-4 py-2 border-t border-gray-200 dark:border-gray-700 md:p-0 md:border-0 md:px-6 md:py-4 md:align-middle">
+                                                        <div class="flex justify-between items-center md:block">
+                                                            <span class="text-sm font-medium text-gray-500 dark:text-gray-400 md:hidden">Harga Modal</span>
+                                                            <span class="text-sm text-gray-800 dark:text-gray-200">Rp {{ number_format($skuData[$sku]['cost_price_raw'] ?? 0, 0, ',', '.') }}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td class="block md:table-cell px-4 py-2 border-t border-gray-200 dark:border-gray-700 md:p-0 md:border-0 md:px-6 md:py-4 md:align-middle">
+                                                        <div class="flex justify-between items-center md:block">
+                                                            <span class="text-sm font-medium text-gray-500 dark:text-gray-400 md:hidden">Stok Gudang</span>
+                                                            @php
+                                                                $stock = $skuData[$sku]['warehouse_stock_raw'] ?? 0;
+                                                                $stockClass = 'text-gray-800 dark:text-gray-200';
+                                                                if ($stock <= 0) { $stockClass = 'text-red-600 dark:text-red-400 font-bold'; } 
+                                                                elseif ($stock <= 10) { $stockClass = 'text-yellow-600 dark:text-yellow-400 font-semibold'; }
+                                                            @endphp
+                                                            <span class="text-sm {{ $stockClass }}">{{ $stock }}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td class="block md:table-cell px-4 py-2 border-t border-gray-200 dark:border-gray-700 md:p-0 md:border-0 md:px-6 md:py-4 md:align-middle">
+                                                        <div class="flex justify-between items-center md:block">
+                                                            <span class="text-sm font-medium text-gray-500 dark:text-gray-400 md:hidden">Jenis SKU</span>
+                                                            @if($skuData[$sku]['sku_type'] === 'gabungan')
+                                                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-100">Gabungan</span>
+                                                            @else
+                                                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100">Mandiri</span>
+                                                            @endif
+                                                        </div>
+                                                    </td>
+                                                    <td class="block md:table-cell px-4 py-2 border-t border-gray-200 dark:border-gray-700 md:p-0 md:border-0 md:px-6 md:py-4 md:align-middle">
+                                                        <div class="flex justify-between items-center md:block">
+                                                            <span class="text-sm font-medium text-gray-500 dark:text-gray-400 md:hidden">Kategori</span>
+                                                            <span class="text-sm text-gray-500 dark:text-gray-400">{{ $productCategories[$skuData[$sku]['product_category_id']] ?? '-' }}</span>
+                                                        </div>
+                                                    </td>
+                                                    {{-- Edit Button (Desktop Only) --}}
+                                                    <td class="hidden md:table-cell p-4 md:px-6 md:py-4 md:whitespace-nowrap md:text-right md:align-middle">
+                                                        <button type="button" class="inline-flex items-center px-3 py-1 border border-gray-300 dark:border-gray-600 text-xs font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
+                                                            Edit
+                                                        </button>
+                                                    </td>
+                                                </tr>
                                             @endif
-                                        @empty
-                                            {{-- PERUBAHAN: Colspan diubah menjadi 4 --}}
-                                            <tr>
-                                                <td colspan="4" class="px-6 py-12 text-center text-gray-500">
-                                                    {{ $this->search ? 'SKU tidak ditemukan.' : 'Tidak ada data SKU.' }}
-                                                </td>
-                                            </tr>
-                                        @endforelse
-                                    </tbody>
-                                </table>
-                            </div>
+                                        @endif
+                                    @empty
+                                        <tr>
+                                            <td colspan="6" class="px-6 py-12 text-center text-gray-500">
+                                                {{ $this->search ? 'SKU tidak ditemukan.' : 'Tidak ada data SKU.' }}
+                                            </td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>

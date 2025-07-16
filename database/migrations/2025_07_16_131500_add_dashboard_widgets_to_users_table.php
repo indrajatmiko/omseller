@@ -11,8 +11,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('buyer_profiles', function (Blueprint $table) {
-            $table->text('buyer_address')->nullable()->after('buyer_real_name');
+        Schema::table('users', function (Blueprint $table) {
+            $table->json('dashboard_widgets')->nullable()->after('password');
         });
     }
 
@@ -21,8 +21,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('buyer_profiles', function (Blueprint $table) {
-            $table->dropColumn('buyer_address');
+        Schema::table('users', function (Blueprint $table) {
+            $table->dropColumn('dashboard_widgets');
         });
     }
 };

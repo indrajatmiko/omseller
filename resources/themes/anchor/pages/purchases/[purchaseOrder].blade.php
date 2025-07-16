@@ -11,21 +11,13 @@ middleware('auth');
 name('purchases.show');
 
 new class extends Component {
-    // PERBAIKAN FINAL: Properti tidak di-type-hint untuk stabilitas maksimum dengan Volt.
     public $purchaseOrder;
 
-    // Parameter mount juga tidak di-type-hint untuk menerima ID mentah dari URL.
     public function mount($purchaseOrder): void
     {
-        // Cari PO secara manual dengan menyertakan pemeriksaan keamanan.
-        // findOrFail akan otomatis melempar 404 jika tidak ditemukan.
         $po = PurchaseOrder::where('user_id', auth()->id())
                            ->findOrFail($purchaseOrder);
-
-        // Muat relasi yang diperlukan.
         $po->load('items.productVariant');
-
-        // Set properti komponen dengan objek model yang sudah divalidasi dan dimuat.
         $this->purchaseOrder = $po;
     }
 
@@ -63,6 +55,35 @@ new class extends Component {
         $this->purchaseOrder->refresh();
     }
 
+    // [TAMBAHAN] Metode untuk menghapus Purchase Order
+    public function deletePO(): void
+    {
+        // Keamanan tambahan: Pastikan statusnya adalah 'draft'
+        if ($this->purchaseOrder->status !== 'draft') {
+            Notification::make()
+                ->title('Aksi Tidak Diizinkan')
+                ->warning()
+                ->body('Hanya Purchase Order dengan status DRAFT yang dapat dihapus.')
+                ->send();
+            return;
+        }
+
+        $poNumber = $this->purchaseOrder->po_number;
+        
+        // Eloquent akan menghapus item terkait secara otomatis jika relasi onDelete('cascade') diatur di migrasi.
+        $this->purchaseOrder->delete();
+
+        Notification::make()
+            ->title('Purchase Order Dihapus')
+            ->success()
+            ->body("PO #{$poNumber} telah berhasil dihapus.")
+            ->send();
+
+        // Redirect kembali ke halaman index setelah penghapusan berhasil
+        $this->redirectRoute('purchases.index');
+    }
+
+
     public function with(): array { return []; }
 };
 ?>
@@ -72,16 +93,31 @@ new class extends Component {
         <div>
             <x-app.container>
                 @if($purchaseOrder)
-                    <div class="flex justify-between items-start">
+                    <div class="flex flex-col sm:flex-row justify-between items-start gap-4">
                         <div>
                             <x-app.heading :title="'Detail Purchase Order #' . $purchaseOrder->po_number" :border="false" />
                             <p class="mt-1 text-sm text-gray-500">Dibuat pada {{ $purchaseOrder->created_at?->format('d F Y, H:i') ?? '-' }}</p>
                         </div>
-                        @if($purchaseOrder->status === 'draft' || $purchaseOrder->status === 'ordered')
-                            <button wire:click="receiveStock" wire:confirm="Anda yakin ingin menandai semua item di PO ini sebagai DITERIMA? Stok akan otomatis ditambahkan." class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-700">
-                                Tandai Diterima & Tambah Stok
-                            </button>
-                        @endif
+                        
+                        {{-- [TAMBAHAN] Grup untuk tombol-tombol aksi --}}
+                        <div class="flex items-center gap-2 self-start sm:self-center">
+                            @if($purchaseOrder->status === 'draft')
+                                {{-- [TAMBAHAN] Tombol Hapus dengan konfirmasi --}}
+                                <button 
+                                    wire:click="deletePO" 
+                                    wire:confirm="Anda yakin ingin menghapus Purchase Order ini? Aksi ini tidak dapat dibatalkan."
+                                    class="inline-flex items-center px-4 py-2 bg-red-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-red-700"
+                                >
+                                    Hapus PO
+                                </button>
+                            @endif
+
+                            @if($purchaseOrder->status === 'draft' || $purchaseOrder->status === 'ordered')
+                                <button wire:click="receiveStock" wire:confirm="Anda yakin ingin menandai semua item di PO ini sebagai DITERIMA? Stok akan otomatis ditambahkan." class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-700">
+                                    Tandai Diterima
+                                </button>
+                            @endif
+                        </div>
                     </div>
                     <hr class="my-6 dark:border-gray-700">
 

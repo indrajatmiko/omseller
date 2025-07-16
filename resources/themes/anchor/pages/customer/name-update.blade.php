@@ -17,31 +17,8 @@ new class extends Component {
     use WithPagination;
 
     public array $buyerNames = [];
-    public array $buyerAddresses = [];
     public string $search = '';
 
-    // Rules untuk validasi
-    protected $rules = [
-        'buyerNames.*'    => 'required|min:3',
-        'buyerAddresses.*' => 'required|min:10',
-    ];
-
-    // Custom error messages
-    protected $messages = [
-        'buyerNames.*.required'    => 'Nama pembeli wajib diisi.',
-        'buyerNames.*.min'         => 'Nama minimal 3 karakter.',
-        'buyerAddresses.*.required' => 'Alamat pembeli wajib diisi.',
-        'buyerAddresses.*.min'      => 'Alamat minimal 10 karakter.',
-    ];
-
-    // Validasi real-time saat input berubah
-    public function updated($name, $value)
-    {
-        if (str_starts_with($name, 'buyerNames.') || str_starts_with($name, 'buyerAddresses.')) {
-            $this->validateOnly($name);
-        }
-    }
-    
     // Method mount sekarang jauh lebih sederhana, karena kita tidak perlu lagi
     // mem-preload status 'known'/'unknown'. Semua yang ditampilkan adalah 'unknown'.
     public function mount(): void
@@ -55,36 +32,27 @@ new class extends Component {
         $this->resetPage();
     }
 
-    public function saveBuyerProfile(int $orderId): void
+    public function saveBuyerName(int $orderId): void
     {
-        // Validasi spesifik untuk order ini
-        $this->validate([
-            "buyerNames.$orderId"    => 'required|min:3',
-            "buyerAddresses.$orderId" => 'required|min:10',
-        ]);
-
         $order = Order::find($orderId);
+        // Pastikan order ada dan milik user yang login
         if (!$order || $order->user_id !== auth()->id()) {
             return;
         }
 
-        $nameToSave = trim($this->buyerNames[$orderId]);
-        $addressToSave = trim($this->buyerAddresses[$orderId]);
+        $nameToSave = trim($this->buyerNames[$orderId] ?? '');
 
-        BuyerProfile::updateOrCreate(
-            [
-                'user_id' => auth()->id(),
-                'buyer_username' => $order->buyer_username,
-                'address_identifier' => sha1(trim($order->address_full))
-            ],
-            [
-                'buyer_real_name' => $nameToSave,
-                'buyer_address' => $addressToSave
-            ]
-        );
-
-        if ($order->buyer_name !== $nameToSave) {
-            $order->update(['buyer_name' => $nameToSave]);
+        if (!empty($nameToSave)) {
+            // Logika untuk menyimpan profil tetap sama
+            BuyerProfile::updateOrCreate(
+                ['user_id' => auth()->id(), 'buyer_username' => $order->buyer_username, 'address_identifier' => sha1(trim($order->address_full))],
+                ['buyer_real_name' => $nameToSave]
+            );
+            if ($order->buyer_name !== $nameToSave) {
+                 $order->update(['buyer_name' => $nameToSave]);
+            }
+            // Setelah disimpan, item ini akan otomatis hilang dari daftar saat komponen re-render,
+            // jadi tidak perlu aksi tambahan.
         }
     }
 
@@ -188,34 +156,18 @@ new class extends Component {
                                         </p>
                                     </div>
                                 </div>
-                                <div class="sm:col-span-2 space-y-3"> <!-- Tambahkan spacing vertikal -->
-        <div>
-            <label for="buyer_name_{{ $order->id }}" class="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">Nama Pembeli</label>
-            <input
-                type="text" 
-                id="buyer_name_{{ $order->id }}" 
-                wire:model="buyerNames.{{ $order->id }}"
-                wire:blur="saveBuyerProfile({{ $order->id }})" 
-                placeholder="Ketik nama pembeli di sini..."
-                class="block w-full border rounded-lg shadow-sm focus:ring-opacity-50 transition-colors duration-200 bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-gray-100 placeholder-gray-400
-                    @error('buyerNames.'.$order->id) border-red-400 @else border-gray-300 dark:border-gray-600 @enderror
-                    focus:border-black dark:focus:border-white focus:ring-black dark:focus:ring-white"
-            >
-        </div>
-        <div>
-            <label for="buyer_address_{{ $order->id }}" class="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">Alamat Lengkap</label>
-            <textarea
-                id="buyer_address_{{ $order->id }}" 
-                wire:model="buyerAddresses.{{ $order->id }}"
-                wire:blur="saveBuyerProfile({{ $order->id }})" 
-                placeholder="Ketik alamat lengkap pembeli di sini..."
-                rows="2"
-                class="block w-full border rounded-lg shadow-sm focus:ring-opacity-50 transition-colors duration-200 bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-gray-100 placeholder-gray-400
-                    @error('buyerAddresses.'.$order->id) border-red-400 @else border-gray-300 dark:border-gray-600 @enderror
-                    focus:border-black dark:focus:border-white focus:ring-black dark:focus:ring-white"
-            ></textarea>
-        </div>
-    </div>
+                                <div class="sm:col-span-2">
+                                    <label for="buyer_name_{{ $order->id }}" class="sr-only">Nama Pembeli</label>
+                                    <input
+                                        type="text" id="buyer_name_{{ $order->id }}" wire:model="buyerNames.{{ $order->id }}"
+                                        wire:blur="saveBuyerName({{ $order->id }})" placeholder="Ketik nama pembeli di sini..."
+                                        {{-- Karena item yang 'known' sudah disembunyikan, kita tidak perlu lagi 'disabled' atau styling khusus 'known'. --}}
+                                        {{-- Cukup styling untuk input yang masih kosong. --}}
+                                        class="block w-full border rounded-lg shadow-sm focus:ring-opacity-50 transition-colors duration-200 bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-gray-100 placeholder-gray-400
+                                        @if(empty($this->buyerNames[$order->id])) border-red-400 dark:border-red-500 focus:border-red-500 dark:focus:border-red-500 focus:ring-red-500
+                                        @else border-gray-300 dark:border-gray-600 focus:border-black dark:focus:border-white focus:ring-black dark:focus:ring-white @endif"
+                                    >
+                                </div>
                             </div>
                         </div>
                     @empty

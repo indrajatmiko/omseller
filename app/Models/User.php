@@ -30,6 +30,11 @@ class User extends WaveUser
         'verification_code',
         'verified',
         'trial_ends_at',
+        'dashboard_widgets',
+    ];
+
+    protected $casts = [
+        'dashboard_widgets' => 'array',
     ];
 
     /**

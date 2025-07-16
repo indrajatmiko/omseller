@@ -79,18 +79,35 @@ new class extends Component {
         
         $this->calculateMonthToDateSummary($report);
 
-        // --- PERUBAHAN BARU: Kirim event dengan data untuk grafik donat bulanan ---
-        $this->dispatch('monthly-data-updated', [
-            'monthToDateCostBreakdown' => [
-                'labels' => ['COGS', 'Biaya Marketplace', 'Biaya Iklan', 'Pengeluaran Umum'],
-                'series' => [
-                    $this->summaryMonthToDate['laba_kotor'] > 0 ? ($this->summaryMonthToDate['omset'] - $this->summaryMonthToDate['laba_kotor']) : 0,
-                    ($this->summaryMonthToDate['biaya_admin'] ?? 0) + ($this->summaryMonthToDate['biaya_service'] ?? 0) + ($this->summaryMonthToDate['komisi_ams'] ?? 0) + ($this->summaryMonthToDate['voucher_toko'] ?? 0),
-                    $this->summaryMonthToDate['biaya_iklan'] ?? 0,
-                    $this->summaryMonthToDate['pengeluaran'] ?? 0
-                ]
+        // --- PERUBAHAN BARU: Hitung dan kirim data alokasi omset yang benar ---
+        $omsetMtd = $this->summaryMonthToDate['omset'] ?? 0;
+        $profitMtd = $this->summaryMonthToDate['profit'] ?? 0;
+
+        // Kalkulasi komponen untuk grafik
+        $cogs = $omsetMtd - ($this->summaryMonthToDate['laba_kotor'] ?? 0);
+        $marketplaceFees = ($this->summaryMonthToDate['biaya_admin'] ?? 0) 
+                        + ($this->summaryMonthToDate['biaya_service'] ?? 0) 
+                        + ($this->summaryMonthToDate['komisi_ams'] ?? 0) 
+                        + ($this->summaryMonthToDate['voucher_toko'] ?? 0);
+        $adsFees = $this->summaryMonthToDate['biaya_iklan'] ?? 0;
+        $otherExpenses = $this->summaryMonthToDate['pengeluaran'] ?? 0;
+
+        // Profit tidak boleh negatif di grafik pai. Jika rugi, kita anggap profit 0.
+        $displayProfit = max(0, $profitMtd);
+
+        $chartData = [
+            'labels' => ['Profit Bersih', 'COGS (HPP)', 'Biaya Marketplace', 'Biaya Iklan', 'Pengeluaran Umum'],
+            'series' => [
+                $displayProfit,
+                $cogs,
+                $marketplaceFees,
+                $adsFees,
+                $otherExpenses,
             ]
-        ]);
+        ];
+
+        // Kirim event dengan key yang jelas
+        $this->dispatch('monthly-data-updated', ['monthlyRevenueAllocation' => $chartData]);
 
         return $report;
     }
@@ -135,10 +152,33 @@ new class extends Component {
     
     public function with(): array
     {
+        $reportData = $this->generateReportData(); // Fungsi ini sudah menghitung summary dan dispatch event
+
         $availableYears = Order::where('user_id', auth()->id())->join('order_status_histories', 'orders.id', '=', 'order_status_histories.order_id')->whereNotNull('order_status_histories.pickup_time')->where('order_status_histories.status', 'Sudah Kirim')->select(DB::raw('YEAR(order_status_histories.pickup_time) as year'))->distinct()->orderBy('year', 'desc')->get()->pluck('year');
         if ($availableYears->isEmpty()) { $availableYears = collect([now()->year]); }
         $availableMonths = collect(range(1, 12))->mapWithKeys(fn ($m) => [Carbon::create(null, $m)->month => Carbon::create(null, $m)->isoFormat('MMMM')]);
-        return ['reportData' => $this->generateReportData(), 'availableYears' => $availableYears, 'availableMonths' => $availableMonths];
+
+        // Siapkan data yang sama untuk render awal grafik
+        $omsetMtd = $this->summaryMonthToDate['omset'] ?? 0;
+        $profitMtd = $this->summaryMonthToDate['profit'] ?? 0;
+        
+        $cogs = $omsetMtd - ($this->summaryMonthToDate['laba_kotor'] ?? 0);
+        $marketplaceFees = ($this->summaryMonthToDate['biaya_admin'] ?? 0) + ($this->summaryMonthToDate['biaya_service'] ?? 0) + ($this->summaryMonthToDate['komisi_ams'] ?? 0) + ($this->summaryMonthToDate['voucher_toko'] ?? 0);
+        $adsFees = $this->summaryMonthToDate['biaya_iklan'] ?? 0;
+        $otherExpenses = $this->summaryMonthToDate['pengeluaran'] ?? 0;
+        $displayProfit = max(0, $profitMtd);
+
+        $initialChartData = [
+            'labels' => ['Profit Bersih', 'COGS (HPP)', 'Biaya Marketplace', 'Biaya Iklan', 'Pengeluaran Umum'],
+            'series' => [$displayProfit, $cogs, $marketplaceFees, $adsFees, $otherExpenses]
+        ];
+
+        return [
+            'reportData' => $reportData, 
+            'availableYears' => $availableYears, 
+            'availableMonths' => $availableMonths,
+            'initialChartData' => $initialChartData // Tambahkan ini
+        ];
     }
 }; ?>
 
@@ -191,46 +231,47 @@ new class extends Component {
             
             {{-- Card Bulan Ini s/d Kemarin dengan Perbandingan --}}
             {{-- PERUBAHAN: Card Bulan Ini s/d Kemarin dengan Grafik Donat --}}
-<div wire:key="month-to-date-summary" class="bg-white dark:bg-gray-800/50 shadow-sm rounded-lg p-6">
+            <div wire:key="month-to-date-summary" class="bg-white dark:bg-gray-800/50 shadow-sm rounded-lg p-6">
                 <h4 class="font-semibold text-gray-900 dark:text-white">Awal Bulan s/d Kemarin</h4>
                 <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
                     {{-- Kolom Kiri: Grafik Donat --}}
                     <div x-data="{
                             chart: null,
+                            // Definisikan handler di luar agar bisa diakses oleh cleanup
+                            updateHandler(event) {
+                                // event.detail.monthlyRevenueAllocation adalah payload yang kita kirim dari backend
+                                // Livewire 3 membungkus payload dalam array, jadi kita ambil index 0
+                                const payload = event.detail[0] || {}; 
+                                if (this.$el && payload.monthlyRevenueAllocation) {
+                                    this.renderChart(payload.monthlyRevenueAllocation);
+                                }
+                            },
                             init() {
-                                // Definisikan handler di luar agar bisa diakses oleh cleanup
-                                const handleUpdate = (event) => {
-                                    // Gunakan $el untuk merujuk ke elemen saat ini
-                                    // Ini cara aman untuk memastikan kita tidak memanggil renderChart jika elemen sudah hilang
-                                    if (this.$el) {
-                                        this.renderChart(event.detail[0].monthToDateChartData);
-                                    }
-                                };
-
-                                // Render awal
-                                let initialData = {
-                                    labels: @js(['Omset', 'Laba Kotor', 'Biaya Iklan', 'Biaya Marketplace', 'Pengeluaran', 'Komisi AMS', 'Voucher Toko', 'Profit']),
-                                    series: @js([
-                                        $summaryMonthToDate['omset'] ?? 0,
-                                        $summaryMonthToDate['laba_kotor'] ?? 0,
-                                        $summaryMonthToDate['biaya_iklan'] ?? 0,
-                                        ($summaryMonthToDate['biaya_admin'] ?? 0) + ($summaryMonthToDate['biaya_service'] ?? 0),
-                                        $summaryMonthToDate['pengeluaran'] ?? 0,
-                                        $summaryMonthToDate['komisi_ams'] ?? 0,
-                                        $summaryMonthToDate['voucher_toko'] ?? 0,
-                                        $summaryMonthToDate['profit'] ?? 0
-                                    ])
-                                };
+                                // Render chart dengan data awal dari server yang sudah benar
+                                let initialData = @js($initialChartData);
                                 this.renderChart(initialData);
 
+                                // Bind 'this' agar context di dalam handler benar
+                                const boundUpdateHandler = this.updateHandler.bind(this);
+                                
                                 // Pasang listener
-                                window.addEventListener('monthly-data-updated', handleUpdate);
+                                window.addEventListener('monthly-data-updated', boundUpdateHandler);
+
+                                // Bersihkan listener saat komponen dihancurkan untuk mencegah memory leak
+                                this.$watch('$isUnloaded', () => {
+                                    window.removeEventListener('monthly-data-updated', boundUpdateHandler);
+                                })
                             },
                             renderChart(data) {
-                                if (this.chart) { this.chart.destroy(); }
-                                if(data && data.series && data.series.some(v => v > 0)) {
+                                if (this.chart) {
+                                    this.chart.destroy();
+                                }
+                                // Hanya render jika ada data yang berarti
+                                if (data && data.series && data.series.some(v => v > 0)) {
                                     this.chart = new ApexCharts(this.$refs.donut, this.getOptions(data));
                                     this.chart.render();
+                                } else {
+                                    this.$refs.donut.innerHTML = `<div class='flex items-center justify-center h-full text-gray-500' style='height: 380px;'>Tidak ada data untuk ditampilkan.</div>`;
                                 }
                             },
                             getOptions(data) {
@@ -238,34 +279,17 @@ new class extends Component {
                                     chart: { type: 'donut', height: 380 },
                                     series: data.series,
                                     labels: data.labels,
-                                    colors: ['#000', '#6b7280', '#b91c1c', '#ee4d2d', '#9ca3af', '#3b82f6', '#f59e0b', '#16a34a'],
-                                    
+                                    // Warna yang lebih sesuai dengan kategori baru
+                                    colors: ['#16a34a', '#6b7280', '#ee4d2d', '#b91c1c', '#9ca3af'],
                                     dataLabels: {
                                         enabled: true,
-                                        formatter: function (val, opts) {
-                                            return val.toFixed(1) + '%'
-                                        },
-                                        style: {
-                                            fontSize: '11px',
-                                            fontWeight: 'bold',
-                                            colors: ['#fff']
-                                        },
-                                        dropShadow: {
-                                            enabled: true,
-                                            top: 1,
-                                            left: 1,
-                                            blur: 1,
-                                            color: '#000',
-                                            opacity: 0.45
-                                        }
+                                        formatter: (val) => val.toFixed(1) + '%',
+                                        style: { fontSize: '11px', fontWeight: 'bold', colors: ['#fff'] },
+                                        dropShadow: { enabled: true, top: 1, left: 1, blur: 1, color: '#000', opacity: 0.45 }
                                     },
-                                    
                                     legend: { 
-                                        show: true,
-                                        position: 'bottom',
-                                        horizontalAlign: 'center',
-                                        fontSize: '12px',
-                                        itemMargin: { horizontal: 5, vertical: 2 },
+                                        show: true, position: 'bottom', horizontalAlign: 'center', 
+                                        fontSize: '12px', itemMargin: { horizontal: 5, vertical: 2 },
                                     },
                                     plotOptions: { 
                                         pie: { 
@@ -274,14 +298,13 @@ new class extends Component {
                                                     show: true, 
                                                     value: {
                                                         show: true,
-                                                        formatter: function (val) {
-                                                            return 'Rp ' + parseFloat(val).toLocaleString('id-ID');
-                                                        }
+                                                        formatter: (val) => 'Rp ' + parseFloat(val).toLocaleString('id-ID')
                                                     },
                                                     total: { 
                                                         show: true, 
                                                         label: 'Total Omset', 
-                                                        formatter: (w) => 'Rp ' + w.globals.series[0].toLocaleString('id-ID')
+                                                        // Total dari semua irisan adalah Omset, jadi kita jumlahkan semua seri
+                                                        formatter: (w) => 'Rp ' + w.globals.seriesTotals.reduce((a, b) => a + b, 0).toLocaleString('id-ID')
                                                     } 
                                                 } 
                                             } 
@@ -291,22 +314,7 @@ new class extends Component {
                                     theme: { mode: localStorage.getItem('theme') || 'light' }
                                 }
                             }
-                        }" x-init="renderChart({
-                            labels: @js(['Omset', 'Laba Kotor', 'Biaya Iklan', 'Biaya Marketplace', 'Pengeluaran', 'Komisi AMS', 'Voucher Toko', 'Profit']),
-                            series: @js([
-                                $summaryMonthToDate['omset'] ?? 0,
-                                $summaryMonthToDate['laba_kotor'] ?? 0,
-                                $summaryMonthToDate['biaya_iklan'] ?? 0,
-                                ($summaryMonthToDate['biaya_admin'] ?? 0) + ($summaryMonthToDate['biaya_service'] ?? 0),
-                                $summaryMonthToDate['pengeluaran'] ?? 0,
-                                $summaryMonthToDate['komisi_ams'] ?? 0,
-                                $summaryMonthToDate['voucher_toko'] ?? 0,
-                                $summaryMonthToDate['profit'] ?? 0
-                            ])
-                        })"
-                        x-destroy="
-                            window.removeEventListener('monthly-data-updated', updateHandler);
-                        ">
+                        }">
                         <div x-ref="donut" wire:ignore></div>
                     </div>
                     {{-- Kolom Kanan: Detail Angka & Perbandingan --}}
