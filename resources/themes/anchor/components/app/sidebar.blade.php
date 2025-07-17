@@ -74,8 +74,9 @@
                         <x-app.sidebar-link href="/inventory/stock-takes" icon="phosphor-trolley-suitcase" :active="(Request::is('inventory/stock-takes*'))">STOK Opname</x-app.sidebar-link>
                     </x-app.sidebar-dropdown>
                     
-                    <x-app.sidebar-dropdown text="Laporan" icon="phosphor-arrows-clockwise" id="reports_dropdown" :active="(Request::is('reports'))" :open="(Request::is('reports/daily-shipments') || Request::is('reports/profit-loss') || Request::is('reports/quarterly-review') || Request::is('reports/shipping-anomaly')) ? '1' : '0'">
+                    <x-app.sidebar-dropdown text="Laporan" icon="phosphor-arrows-clockwise" id="reports_dropdown" :active="(Request::is('reports'))" :open="(Request::is('reports/daily-shipments') || Request::is('reports/profit-loss') || Request::is('reports/quarterly-review') || Request::is('reports/shipping-anomaly') || Request::is('reports/cancelled-orders')) ? '1' : '0'">
                         <x-app.sidebar-link href="/reports/daily-shipments" icon="phosphor-package" :active="(Request::is('reports/daily-shipments'))">Barang Keluar</x-app.sidebar-link>
+                        <x-app.sidebar-link href="/reports/cancelled-orders" icon="phosphor-package" :active="(Request::is('reports/cancelled-orders'))">Pesanan Dibatalkan</x-app.sidebar-link>
                         <x-app.sidebar-link href="/reports/profit-loss" icon="phosphor-package" :active="(Request::is('reports/profit-loss'))">Laba Rugi</x-app.sidebar-link>
                         <x-app.sidebar-link href="/reports/quarterly-review" icon="phosphor-package" :active="(Request::is('reports/quarterly-review'))">Kuartalan</x-app.sidebar-link>
                         <x-app.sidebar-link href="/reports/shipping-anomaly" icon="phosphor-package" :active="(Request::is('reports/shipping-anomaly'))">Anomali Ongkir</x-app.sidebar-link>
