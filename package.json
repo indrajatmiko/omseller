@@ -19,5 +19,8 @@
     "postcss-nesting": "^12.1.1",
     "tailwindcss": "^3.4.3",
     "vite": "^6.2"
+  },
+  "dependencies": {
+    "flatpickr": "^4.6.13"
   }
 }
