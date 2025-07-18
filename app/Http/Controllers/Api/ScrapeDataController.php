@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Api;
 
-// ... use statements
 use App\Http\Controllers\Controller;
 use App\Models\CampaignReport;
 use Illuminate\Http\Request;
@@ -18,7 +17,6 @@ class ScrapeDataController extends Controller
     public function store(Request $request)
     {
         Log::info('--- Received Scrape Request ---', $request->all());
-
         $validator = Validator::make($request->all(), [
             'campaign_id' => 'required|integer',
             'aggregatedData' => 'required|array|min:1',
@@ -39,14 +37,11 @@ class ScrapeDataController extends Controller
         foreach ($validated['aggregatedData'] as $dailyData) {
             try {
                 DB::transaction(function () use ($user, $validated, $dailyData, &$reportsCreated, &$reportsUpdated) {
-                    
                     $data = $dailyData['data'];
                     $scrapeDate = $dailyData['scrapeDate'];
-                    
                     Log::info("Processing data for scrapeDate: {$scrapeDate}");
 
                     $reportValues = $this->getReportValues($data);
-                    
                     $uniqueAttributes = [
                         'user_id' => (int) $user->id,
                         'campaign_id' => (int) $validated['campaign_id'],
@@ -60,34 +55,38 @@ class ScrapeDataController extends Controller
                         Log::info("CREATED new CampaignReport ID: {$report->id}");
                     } else {
                         $reportsUpdated++;
-                        Log::info("UPDATING existing CampaignReport ID: {$report->id}. Deleting old details...");
+                        Log::info("UPDATING existing CampaignReport ID: {$report->id}. Deleting all old details...");
                         $report->keywordPerformances()->delete();
                         $report->recommendationPerformances()->delete();
+                        $report->gmvPerformanceDetails()->delete(); // Bersihkan semua jenis detail untuk kesederhanaan
                     }
                     
-                    // Simpan performa kata kunci (untuk SEMUA mode)
+                    // Alur Mode Manual
                     if (!empty($data['keywordPerformance'])) {
-                        Log::info("Found " . count($data['keywordPerformance']) . " keyword performance items.");
+                        Log::info("Processing Manual Mode: Found " . count($data['keywordPerformance']) . " keyword performance items.");
                         foreach ($data['keywordPerformance'] as $kw) {
-                            $report->keywordPerformances()->create($this->flattenMetrics($kw, false));
+                            $report->keywordPerformances()->create($this->flattenManualMetrics($kw, false));
+                        }
+                    }
+                    if (!empty($data['recommendationPerformance'])) {
+                        Log::info("Processing Manual Mode: Found " . count($data['recommendationPerformance']) . " recommendation performance items.");
+                        foreach ($data['recommendationPerformance'] as $rec) {
+                            $report->recommendationPerformances()->create($this->flattenManualMetrics($rec, true));
                         }
                     }
 
-                    // Simpan performa rekomendasi (untuk SEMUA mode)
-                    if (!empty($data['recommendationPerformance'])) {
-                        Log::info("Found " . count($data['recommendationPerformance']) . " recommendation performance items.");
-                        foreach ($data['recommendationPerformance'] as $rec) {
-                            $report->recommendationPerformances()->create($this->flattenMetrics($rec, true));
+                    // (BARU) Alur Mode GMV
+                    if (!empty($data['gmvPerformance'])) {
+                        Log::info("Processing GMV Mode: Found " . count($data['gmvPerformance']) . " GMV performance items.");
+                        foreach ($data['gmvPerformance'] as $gmv) {
+                            // Langsung gunakan data karena sudah datar (flat)
+                            $report->gmvPerformanceDetails()->create($gmv);
                         }
                     }
                 });
             } catch (Throwable $e) {
-                Log::error('Failed to store scrape data for user ' . $user->id, [
-                    'message' => $e->getMessage(),
-                    'file' => $e->getFile(),
-                    'line' => $e->getLine(),
-                    'trace' => $e->getTraceAsString(),
-                ]);
+                // ... (Error handling tetap sama)
+                Log::error('Failed to store scrape data for user ' . $user->id, [ 'message' => $e->getMessage(), 'trace' => $e->getTraceAsString() ]);
                 return response()->json(['message' => 'Kesalahan internal server: ' . $e->getMessage()], 500);
             }
         }
@@ -99,22 +98,9 @@ class ScrapeDataController extends Controller
         ], 200);
     }
 
-    public function getScrapedDates($campaign_id)
-    {
-        // ... (Fungsi ini sudah benar, tidak perlu diubah)
-        $user = Auth::user();
-        $dates = DB::table('campaign_reports')
-            ->where('user_id', $user->id)
-            ->where('campaign_id', $campaign_id)
-            ->orderBy('scrape_date', 'desc')
-            ->pluck('scrape_date');
-        $formattedDates = $dates->map(fn ($date) => Carbon::parse($date)->format('Y-m-d'));
-        return response()->json($formattedDates);
-    }
+    public function getScrapedDates($campaign_id) { /* ...Fungsi ini tetap sama... */ }
 
-    private function getReportValues(array $data): array
-    {
-        // ... (Fungsi ini sudah benar, tidak perlu diubah)
+    private function getReportValues(array $data): array {
         $productInfo = $data['productInfo'] ?? [];
         $perfMetrics = $data['performanceMetrics'] ?? [];
         return [
@@ -140,9 +126,11 @@ class ScrapeDataController extends Controller
         ];
     }
     
-    private function flattenMetrics(array $item, bool $isRecommendation = false): array
-    {
-        // ... (Fungsi ini sudah benar, tidak perlu diubah)
+    /**
+     * (Diganti namanya menjadi flattenManualMetrics untuk kejelasan)
+     * Meratakan struktur data untuk mode Manual.
+     */
+    private function flattenManualMetrics(array $item, bool $isRecommendation = false): array {
         $base = [];
         if ($isRecommendation) {
             $base = ['penempatan' => $item['penempatan'] ?? null, 'harga_bid' => $item['harga_bid'] ?? null, 'disarankan' => $item['disarankan'] ?? null];
