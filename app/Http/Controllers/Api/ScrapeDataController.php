@@ -63,10 +63,12 @@ class ScrapeDataController extends Controller
                         Log::info("UPDATING existing CampaignReport ID: {$report->id}. Deleting old details...");
                         $report->keywordPerformances()->delete();
                         $report->recommendationPerformances()->delete();
-                        $report->gmvPerformanceDetails()->delete(); // Nama relasi tetap sama
+                        // (MODIFIKASI) Menghapus pembersihan gmvPerformanceDetails karena tidak lagi digunakan dalam flow ini
+                        // Jika Anda masih memiliki data lama, Anda mungkin ingin membiarkan ini untuk satu kali pembersihan
+                        // $report->gmvPerformanceDetails()->delete(); 
                     }
                     
-                    // Simpan performa kata kunci (mode Manual/GMV Max)
+                    // Simpan performa kata kunci (untuk mode Manual dan GMV-based)
                     if (!empty($data['keywordPerformance'])) {
                         Log::info("Found " . count($data['keywordPerformance']) . " keyword performance items.");
                         foreach ($data['keywordPerformance'] as $kw) {
@@ -74,7 +76,7 @@ class ScrapeDataController extends Controller
                         }
                     }
 
-                    // Simpan performa rekomendasi (mode Manual/GMV Max)
+                    // Simpan performa rekomendasi (untuk mode Manual dan GMV-based)
                     if (!empty($data['recommendationPerformance'])) {
                         Log::info("Found " . count($data['recommendationPerformance']) . " recommendation performance items.");
                         foreach ($data['recommendationPerformance'] as $rec) {
@@ -82,24 +84,8 @@ class ScrapeDataController extends Controller
                         }
                     }
 
-                    // (MODIFIKASI 1) Simpan detail performa GMV%
-                    // Menggunakan key 'gmvPerformance' sesuai output JS yang baru
-                    if (!empty($data['gmvPerformance'])) {
-                        Log::info("Found " . count($data['gmvPerformance']) . " GMV performance items. Processing now...");
-
-                        foreach ($data['gmvPerformance'] as $gmv) {
-                            // Menggunakan fungsi flatten yang sudah direvisi
-                            $flattenedGmvData = $this->flattenGmvMetrics($gmv);
-                            
-                            Log::info("Attempting to create gmvPerformanceDetail with data:", $flattenedGmvData);
-                            
-                            // Nama fungsi relasi di Model tetap 'gmvPerformanceDetails()'
-                            $report->gmvPerformanceDetails()->create($flattenedGmvData);
-                        }
-                    } else {
-                        // Log jika tidak ada data performa GMV%
-                        Log::info("Key 'gmvPerformance' was not found or is empty for scrapeDate: {$scrapeDate}. This is normal for non-GMV% modes.");
-                    }
+                    // (MODIFIKASI) Blok untuk memproses 'gmvPerformance' dihapus karena tidak lagi relevan
+                    
                 });
             } catch (Throwable $e) {
                 Log::error('Failed to store scrape data for user ' . $user->id, [
@@ -141,9 +127,9 @@ class ScrapeDataController extends Controller
         $productInfo = $data['productInfo'] ?? [];
         $perfMetrics = $data['performanceMetrics'] ?? [];
         
-        $roas_key = array_key_exists('efektivitas_iklan_(roas)', $perfMetrics) ? 'efektivitas_iklan_(roas)' : 'efektivitas_iklan';
-        $cir_key = array_key_exists('cir_(acos)', $perfMetrics) ? 'cir_(acos)' : 'cir';
-
+        $roas_key = 'efektivitas_iklan'; // Disederhanakan karena JS sudah menormalisasi
+        $cir_key = 'cir';
+        
         return [
             'date_range_text' => $productInfo['rentang_tanggal'] ?? null,
             'nama_produk' => $productInfo['nama_produk'] ?? null,
@@ -155,10 +141,10 @@ class ScrapeDataController extends Controller
             'mode_bidding' => $productInfo['mode_bidding'] ?? null,
             'bidding_dinamis' => $productInfo['bidding_dinamis'] ?? null,
             'target_roas' => $productInfo['target_roas'] ?? null,
-            'dilihat' => $perfMetrics['dilihat'] ?? null,
-            'klik' => $perfMetrics['klik'] ?? null,
+            'dilihat' => $perfMetrics['dilihat'] ?? $perfMetrics['iklan_dilihat'] ?? null, // Fallback
+            'klik' => $perfMetrics['klik'] ?? $perfMetrics['jumlah_klik'] ?? null,
             'persentase_klik' => $perfMetrics['persentase_klik'] ?? null,
-            'biaya' => $perfMetrics['biaya'] ?? null,
+            'biaya' => $perfMetrics['biaya'] ?? $perfMetrics['biaya_iklan'] ?? null,
             'pesanan' => $perfMetrics['pesanan'] ?? null,
             'produk_terjual' => $perfMetrics['produk_terjual_di_iklan'] ?? $perfMetrics['produk_terjual'] ?? null,
             'omzet_iklan' => $perfMetrics['omzet_iklan'] ?? null,
@@ -199,44 +185,5 @@ class ScrapeDataController extends Controller
         return $base;
     }
 
-    /**
-     * (MODIFIKASI 2) Fungsi ini disederhanakan untuk menangani struktur data GMV% yang datar.
-     */
-    private function flattenGmvMetrics(array $item): array
-    {
-        // Kunci di map ini HARUS sama persis dengan kunci yang dihasilkan 
-        // oleh fungsi `extractGmvPerformance` di JavaScript Anda.
-        $metricsMap = [
-            'kata_pencarian',
-            'penempatan_rekomendasi',
-            'harga_bid',
-            'iklan_dilihat',
-            'jumlah_klik',
-            'persentase_klik',
-            'biaya_iklan',
-            'penjualan_dari_iklan',
-            'konversi',
-            'produk_terjual',
-            'roas',
-            'persentase_biaya_iklan_acos', // Key yang spesifik dari JS
-            'tingkat_konversi',
-            'biaya_per_konversi',
-            'konversi_langsung',
-            'produk_terjual_langsung',
-            'penjualan_dari_iklan_langsung',
-            'roas_langsung',
-            'acos_langsung',
-            'tingkat_konversi_langsung',
-            'biaya_per_konversi_langsung',
-        ];
-
-        $flattenedData = [];
-
-        foreach ($metricsMap as $key) {
-            // Langsung ambil nilai dari item, karena tidak ada lagi struktur 'value'/'delta'
-            $flattenedData[$key] = $item[$key] ?? null;
-        }
-
-        return $flattenedData;
-    }
+    // (MODIFIKASI) Fungsi flattenGmvMetrics dihapus karena tidak lagi digunakan.
 }
