@@ -27,4 +27,12 @@ class CampaignReport extends Model
     {
         return $this->hasMany(RecommendationPerformance::class);
     }
+
+    /**
+     * Mendapatkan semua detail performa GMV yang terkait dengan laporan ini.
+     */
+    public function gmvPerformanceDetails(): HasMany
+    {
+        return $this->hasMany(GmvPerformanceDetail::class);
+    }
 }

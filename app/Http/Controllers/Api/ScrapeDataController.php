@@ -52,20 +52,30 @@ class ScrapeDataController extends Controller
                         $reportsCreated++;
                     } else {
                         $reportsUpdated++;
+                        // Hapus data lama untuk diganti dengan yang baru
                         $report->keywordPerformances()->delete();
                         $report->recommendationPerformances()->delete();
+                        $report->gmvPerformanceDetails()->delete(); // <-- PERUBAHAN
                     }
                     
+                    // Simpan performa kata kunci (mode Manual)
                     if (!empty($data['keywordPerformance'])) {
                         foreach ($data['keywordPerformance'] as $kw) {
-                            // PERBAIKAN: Tambahkan argumen kedua 'false'
                             $report->keywordPerformances()->create($this->flattenMetrics($kw, false));
                         }
                     }
 
+                    // Simpan performa rekomendasi (mode Manual)
                     if (!empty($data['recommendationPerformance'])) {
                         foreach ($data['recommendationPerformance'] as $rec) {
                             $report->recommendationPerformances()->create($this->flattenMetrics($rec, true));
+                        }
+                    }
+
+                    // (BARU) Simpan detail performa GMV
+                    if (!empty($data['gmvPerformanceDetails'])) {
+                        foreach ($data['gmvPerformanceDetails'] as $gmv) {
+                            $report->gmvPerformanceDetails()->create($this->flattenGmvMetrics($gmv));
                         }
                     }
                 });
@@ -86,11 +96,6 @@ class ScrapeDataController extends Controller
         ], 200);
     }
 
-    /**
-     * Mengambil daftar tanggal yang sudah tersimpan untuk kampanye tertentu.
-     * @param int $campaign_id
-     * @return \Illuminate\Http\JsonResponse
-     */
     public function getScrapedDates($campaign_id)
     {
         $user = Auth::user();
@@ -99,9 +104,8 @@ class ScrapeDataController extends Controller
             ->where('user_id', $user->id)
             ->where('campaign_id', $campaign_id)
             ->orderBy('scrape_date', 'desc')
-            ->pluck('scrape_date'); // Mengambil hanya kolom scrape_date
+            ->pluck('scrape_date');
 
-        // Format tanggal menjadi Y-m-d untuk konsistensi
         $formattedDates = $dates->map(function ($date) {
             return Carbon::parse($date)->format('Y-m-d');
         });
@@ -113,6 +117,11 @@ class ScrapeDataController extends Controller
     {
         $productInfo = $data['productInfo'] ?? [];
         $perfMetrics = $data['performanceMetrics'] ?? [];
+        
+        // --- Perbaikan kecil pada pengambilan 'efektivitas_iklan' & 'cir' ---
+        $roas_key = array_key_exists('efektivitas_iklan_(roas)', $perfMetrics) ? 'efektivitas_iklan_(roas)' : 'efektivitas_iklan';
+        $cir_key = array_key_exists('cir_(acos)', $perfMetrics) ? 'cir_(acos)' : 'cir';
+
         return [
             'date_range_text' => $productInfo['rentang_tanggal'] ?? null,
             'nama_produk' => $productInfo['nama_produk'] ?? null,
@@ -131,8 +140,8 @@ class ScrapeDataController extends Controller
             'pesanan' => $perfMetrics['pesanan'] ?? null,
             'produk_terjual' => $perfMetrics['produk_terjual_di_iklan'] ?? $perfMetrics['produk_terjual'] ?? null,
             'omzet_iklan' => $perfMetrics['omzet_iklan'] ?? null,
-            'efektivitas_iklan' => $perfMetrics['efektivitas_iklan_(roas)'] ?? null,
-            'cir' => $perfMetrics['cir_(acos)'] ?? null,
+            'efektivitas_iklan' => $perfMetrics[$roas_key] ?? null,
+            'cir' => $perfMetrics[$cir_key] ?? null,
         ];
     }
     
@@ -155,25 +164,44 @@ class ScrapeDataController extends Controller
         }
         
         $metricsMap = [
-            'iklan_dilihat' => 'iklan_dilihat',
-            'jumlah_klik' => 'jumlah_klik',
-            'persentase_klik' => 'persentase_klik',
-            'biaya_iklan' => 'biaya_iklan',
-            'penjualan_dari_iklan' => 'penjualan_dari_iklan',
-            'konversi' => 'konversi',
-            'produk_terjual' => 'produk_terjual',
-            'roas' => 'roas',
-            'acos' => 'acos',
-            'tingkat_konversi' => 'tingkat_konversi',
-            'biaya_per_konversi' => 'biaya_per_konversi',
-            'peringkat_rata_rata' => 'peringkat_rata_rata'
+            'iklan_dilihat','jumlah_klik','persentase_klik','biaya_iklan','penjualan_dari_iklan',
+            'konversi','produk_terjual','roas','acos','tingkat_konversi',
+            'biaya_per_konversi','peringkat_rata_rata'
         ];
 
-        foreach($metricsMap as $key => $db_prefix) {
-            $base[$db_prefix . '_value'] = $item[$key]['value'] ?? null;
-            $base[$db_prefix . '_delta'] = $item[$key]['delta'] ?? null;
+        foreach($metricsMap as $key) {
+            $base[$key . '_value'] = $item[$key]['value'] ?? null;
+            $base[$key . '_delta'] = $item[$key]['delta'] ?? null;
         }
         
+        return $base;
+    }
+
+    /**
+     * (FUNGSI BARU) Meratakan struktur data dari gmvPerformanceDetails.
+     */
+    private function flattenGmvMetrics(array $item): array
+    {
+        $base = [
+            'kata_pencarian' => $item['kata_pencarian'] ?? null,
+            'penempatan_rekomendasi' => $item['penempatan_rekomendasi'] ?? null,
+            'harga_bid' => $item['harga_bid'] ?? null,
+        ];
+
+        $metricsMap = [
+            'iklan_dilihat', 'jumlah_klik', 'persentase_klik', 'biaya_iklan',
+            'penjualan_dari_iklan', 'konversi', 'produk_terjual', 'roas', 'acos',
+            'tingkat_konversi', 'biaya_per_konversi', 'konversi_langsung',
+            'produk_terjual_langsung', 'penjualan_dari_iklan_langsung',
+            'roas_langsung', 'acos_langsung', 'tingkat_konversi_langsung',
+            'biaya_per_konversi_langsung'
+        ];
+
+        foreach ($metricsMap as $key) {
+            $base[$key . '_value'] = $item[$key]['value'] ?? null;
+            $base[$key . '_delta'] = $item[$key]['delta'] ?? null;
+        }
+
         return $base;
     }
 }
