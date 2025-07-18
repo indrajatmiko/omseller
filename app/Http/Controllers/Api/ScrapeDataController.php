@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+// ... use statements
 use App\Http\Controllers\Controller;
 use App\Models\CampaignReport;
 use Illuminate\Http\Request;
@@ -16,7 +17,6 @@ class ScrapeDataController extends Controller
 {
     public function store(Request $request)
     {
-        // Log seluruh data yang masuk untuk verifikasi awal
         Log::info('--- Received Scrape Request ---', $request->all());
 
         $validator = Validator::make($request->all(), [
@@ -63,12 +63,9 @@ class ScrapeDataController extends Controller
                         Log::info("UPDATING existing CampaignReport ID: {$report->id}. Deleting old details...");
                         $report->keywordPerformances()->delete();
                         $report->recommendationPerformances()->delete();
-                        // (MODIFIKASI) Menghapus pembersihan gmvPerformanceDetails karena tidak lagi digunakan dalam flow ini
-                        // Jika Anda masih memiliki data lama, Anda mungkin ingin membiarkan ini untuk satu kali pembersihan
-                        // $report->gmvPerformanceDetails()->delete(); 
                     }
                     
-                    // Simpan performa kata kunci (untuk mode Manual dan GMV-based)
+                    // Simpan performa kata kunci (untuk SEMUA mode)
                     if (!empty($data['keywordPerformance'])) {
                         Log::info("Found " . count($data['keywordPerformance']) . " keyword performance items.");
                         foreach ($data['keywordPerformance'] as $kw) {
@@ -76,16 +73,13 @@ class ScrapeDataController extends Controller
                         }
                     }
 
-                    // Simpan performa rekomendasi (untuk mode Manual dan GMV-based)
+                    // Simpan performa rekomendasi (untuk SEMUA mode)
                     if (!empty($data['recommendationPerformance'])) {
                         Log::info("Found " . count($data['recommendationPerformance']) . " recommendation performance items.");
                         foreach ($data['recommendationPerformance'] as $rec) {
                             $report->recommendationPerformances()->create($this->flattenMetrics($rec, true));
                         }
                     }
-
-                    // (MODIFIKASI) Blok untuk memproses 'gmvPerformance' dihapus karena tidak lagi relevan
-                    
                 });
             } catch (Throwable $e) {
                 Log::error('Failed to store scrape data for user ' . $user->id, [
@@ -107,29 +101,22 @@ class ScrapeDataController extends Controller
 
     public function getScrapedDates($campaign_id)
     {
+        // ... (Fungsi ini sudah benar, tidak perlu diubah)
         $user = Auth::user();
-
         $dates = DB::table('campaign_reports')
             ->where('user_id', $user->id)
             ->where('campaign_id', $campaign_id)
             ->orderBy('scrape_date', 'desc')
             ->pluck('scrape_date');
-
-        $formattedDates = $dates->map(function ($date) {
-            return Carbon::parse($date)->format('Y-m-d');
-        });
-
+        $formattedDates = $dates->map(fn ($date) => Carbon::parse($date)->format('Y-m-d'));
         return response()->json($formattedDates);
     }
 
     private function getReportValues(array $data): array
     {
+        // ... (Fungsi ini sudah benar, tidak perlu diubah)
         $productInfo = $data['productInfo'] ?? [];
         $perfMetrics = $data['performanceMetrics'] ?? [];
-        
-        $roas_key = 'efektivitas_iklan'; // Disederhanakan karena JS sudah menormalisasi
-        $cir_key = 'cir';
-        
         return [
             'date_range_text' => $productInfo['rentang_tanggal'] ?? null,
             'nama_produk' => $productInfo['nama_produk'] ?? null,
@@ -141,49 +128,32 @@ class ScrapeDataController extends Controller
             'mode_bidding' => $productInfo['mode_bidding'] ?? null,
             'bidding_dinamis' => $productInfo['bidding_dinamis'] ?? null,
             'target_roas' => $productInfo['target_roas'] ?? null,
-            'dilihat' => $perfMetrics['dilihat'] ?? $perfMetrics['iklan_dilihat'] ?? null, // Fallback
-            'klik' => $perfMetrics['klik'] ?? $perfMetrics['jumlah_klik'] ?? null,
+            'dilihat' => $perfMetrics['iklan_dilihat'] ?? null,
+            'klik' => $perfMetrics['jumlah_klik'] ?? null,
             'persentase_klik' => $perfMetrics['persentase_klik'] ?? null,
-            'biaya' => $perfMetrics['biaya'] ?? $perfMetrics['biaya_iklan'] ?? null,
+            'biaya' => $perfMetrics['biaya_iklan'] ?? null,
             'pesanan' => $perfMetrics['pesanan'] ?? null,
-            'produk_terjual' => $perfMetrics['produk_terjual_di_iklan'] ?? $perfMetrics['produk_terjual'] ?? null,
+            'produk_terjual' => $perfMetrics['produk_terjual'] ?? null,
             'omzet_iklan' => $perfMetrics['omzet_iklan'] ?? null,
-            'efektivitas_iklan' => $perfMetrics[$roas_key] ?? null,
-            'cir' => $perfMetrics[$cir_key] ?? null,
+            'efektivitas_iklan' => $perfMetrics['efektivitas_iklan'] ?? null,
+            'cir' => $perfMetrics['cir'] ?? null,
         ];
     }
     
     private function flattenMetrics(array $item, bool $isRecommendation = false): array
     {
+        // ... (Fungsi ini sudah benar, tidak perlu diubah)
         $base = [];
         if ($isRecommendation) {
-            $base = [
-                'penempatan' => $item['penempatan'] ?? null,
-                'harga_bid' => $item['harga_bid'] ?? null,
-                'disarankan' => $item['disarankan'] ?? null,
-            ];
+            $base = ['penempatan' => $item['penempatan'] ?? null, 'harga_bid' => $item['harga_bid'] ?? null, 'disarankan' => $item['disarankan'] ?? null];
         } else {
-            $base = [
-                'kata_pencarian' => $item['kata_pencarian'] ?? null,
-                'tipe_pencocokan' => $item['tipe_pencocokan'] ?? null,
-                'per_klik' => $item['per_klik'] ?? null,
-                'disarankan' => $item['disarankan'] ?? null,
-            ];
+            $base = ['kata_pencarian' => $item['kata_pencarian'] ?? null, 'tipe_pencocokan' => $item['tipe_pencocokan'] ?? null, 'per_klik' => $item['per_klik'] ?? null, 'disarankan' => $item['disarankan'] ?? null];
         }
-        
-        $metricsMap = [
-            'iklan_dilihat','jumlah_klik','persentase_klik','biaya_iklan','penjualan_dari_iklan',
-            'konversi','produk_terjual','roas','acos','tingkat_konversi',
-            'biaya_per_konversi','peringkat_rata_rata'
-        ];
-
+        $metricsMap = ['iklan_dilihat','jumlah_klik','persentase_klik','biaya_iklan','penjualan_dari_iklan','konversi','produk_terjual','roas','acos','tingkat_konversi','biaya_per_konversi','peringkat_rata_rata'];
         foreach($metricsMap as $key) {
             $base[$key . '_value'] = $item[$key]['value'] ?? null;
             $base[$key . '_delta'] = $item[$key]['delta'] ?? null;
         }
-        
         return $base;
     }
-
-    // (MODIFIKASI) Fungsi flattenGmvMetrics dihapus karena tidak lagi digunakan.
 }
