@@ -14,8 +14,11 @@ use Carbon\Carbon;
 
 class ScrapeDataController extends Controller
 {
-    public function store(Request $request)
+public function store(Request $request)
     {
+        // Log seluruh data yang masuk untuk verifikasi awal
+        Log::info('--- Received Scrape Request ---', $request->all());
+
         $validator = Validator::make($request->all(), [
             'campaign_id' => 'required|integer',
             'aggregatedData' => 'required|array|min:1',
@@ -24,6 +27,7 @@ class ScrapeDataController extends Controller
         ]);
 
         if ($validator->fails()) {
+            Log::error('Validation failed.', $validator->errors()->toArray());
             return response()->json(['message' => 'Data tidak valid.', 'errors' => $validator->errors()], 422);
         }
 
@@ -37,29 +41,34 @@ class ScrapeDataController extends Controller
                 DB::transaction(function () use ($user, $validated, $dailyData, &$reportsCreated, &$reportsUpdated) {
                     
                     $data = $dailyData['data'];
+                    $scrapeDate = $dailyData['scrapeDate'];
                     
+                    Log::info("Processing data for scrapeDate: {$scrapeDate}");
+
                     $reportValues = $this->getReportValues($data);
                     
                     $uniqueAttributes = [
                         'user_id' => (int) $user->id,
                         'campaign_id' => (int) $validated['campaign_id'],
-                        'scrape_date' => Carbon::parse($dailyData['scrapeDate'])->startOfDay(),
+                        'scrape_date' => Carbon::parse($scrapeDate)->startOfDay(),
                     ];
                     
                     $report = CampaignReport::updateOrCreate($uniqueAttributes, $reportValues);
 
                     if ($report->wasRecentlyCreated) {
                         $reportsCreated++;
+                        Log::info("CREATED new CampaignReport ID: {$report->id}");
                     } else {
                         $reportsUpdated++;
-                        // Hapus data lama untuk diganti dengan yang baru
+                        Log::info("UPDATING existing CampaignReport ID: {$report->id}. Deleting old details...");
                         $report->keywordPerformances()->delete();
                         $report->recommendationPerformances()->delete();
-                        $report->gmvPerformanceDetails()->delete(); // <-- PERUBAHAN
+                        $report->gmvPerformanceDetails()->delete();
                     }
                     
                     // Simpan performa kata kunci (mode Manual)
                     if (!empty($data['keywordPerformance'])) {
+                        Log::info("Found " . count($data['keywordPerformance']) . " keyword performance items.");
                         foreach ($data['keywordPerformance'] as $kw) {
                             $report->keywordPerformances()->create($this->flattenMetrics($kw, false));
                         }
@@ -67,16 +76,28 @@ class ScrapeDataController extends Controller
 
                     // Simpan performa rekomendasi (mode Manual)
                     if (!empty($data['recommendationPerformance'])) {
+                        Log::info("Found " . count($data['recommendationPerformance']) . " recommendation performance items.");
                         foreach ($data['recommendationPerformance'] as $rec) {
                             $report->recommendationPerformances()->create($this->flattenMetrics($rec, true));
                         }
                     }
 
-                    // (BARU) Simpan detail performa GMV
+                    // (DEBUGGING) Simpan detail performa GMV
                     if (!empty($data['gmvPerformanceDetails'])) {
+                        // LOG PENTING 1: Konfirmasi bahwa blok ini dieksekusi
+                        Log::info("Found " . count($data['gmvPerformanceDetails']) . " GMV performance items. Processing now...");
+
                         foreach ($data['gmvPerformanceDetails'] as $gmv) {
-                            $report->gmvPerformanceDetails()->create($this->flattenGmvMetrics($gmv));
+                            $flattenedGmvData = $this->flattenGmvMetrics($gmv);
+                            
+                            // LOG PENTING 2: Lihat data yang akan dimasukkan ke DB
+                            Log::info("Attempting to create gmvPerformanceDetail with data:", $flattenedGmvData);
+                            
+                            $report->gmvPerformanceDetails()->create($flattenedGmvData);
                         }
+                    } else {
+                        // LOG PENTING 3: Konfirmasi jika data tidak ada atau kosong
+                        Log::warning("Key 'gmvPerformanceDetails' was not found or is empty for scrapeDate: {$scrapeDate}.");
                     }
                 });
             } catch (Throwable $e) {
@@ -84,6 +105,7 @@ class ScrapeDataController extends Controller
                     'message' => $e->getMessage(),
                     'file' => $e->getFile(),
                     'line' => $e->getLine(),
+                    'trace' => $e->getTraceAsString(), // Tambahkan trace untuk detail lebih
                 ]);
                 return response()->json(['message' => 'Kesalahan internal server: ' . $e->getMessage()], 500);
             }
