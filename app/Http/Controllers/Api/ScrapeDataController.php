@@ -111,17 +111,17 @@ class ScrapeDataController extends Controller
             'modal' => $productInfo['modal'] ?? null,
             'periode_iklan' => $productInfo['periode_iklan'] ?? null,
             'penempatan_iklan' => $productInfo['penempatan_iklan'] ?? null,
-            'mode_bidding' => $productInfo['mode_bidding'] ?? null,
+            'mode_bidding' => $productInfo['mode_bidding'] ?? null, // Ini akan terisi sekarang
             'bidding_dinamis' => $productInfo['bidding_dinamis'] ?? null,
-            'target_roas' => $productInfo['target_roas'] ?? null,
-            'dilihat' => $perfMetrics['iklan_dilihat'] ?? null,
-            'klik' => $perfMetrics['jumlah_klik'] ?? null,
-            'persentase_klik' => $perfMetrics['persentase_klik'] ?? null,
-            'biaya' => $perfMetrics['biaya_iklan'] ?? null,
+            'target_roas' => $productInfo['target_roas'] ?? null, // Ini akan terisi sekarang
+            'dilihat' => $perfMetrics['dilihat'] ?? null, // Cocokkan dengan payload JSON
+            'klik' => $perfMetrics['klik'] ?? null, // Cocokkan dengan payload JSON
+            'persentase_klik' => $perfMetrics['persentase_klik'] ?? null, // Cocokkan dengan payload JSON
+            'biaya' => $perfMetrics['biaya'] ?? null, // Cocokkan dengan payload JSON
             'pesanan' => $perfMetrics['pesanan'] ?? null,
-            'produk_terjual' => $perfMetrics['produk_terjual'] ?? null,
-            'omzet_iklan' => $perfMetrics['omzet_iklan'] ?? null,
-            'efektivitas_iklan' => $perfMetrics['efektivitas_iklan'] ?? null,
+            'produk_terjual' => $perfMetrics['produk_terjual'] ?? null, // Cocokkan dengan payload JSON
+            'omzet_iklan' => $perfMetrics['omzet_iklan'] ?? null, // Cocokkan dengan payload JSON
+            'efektivitas_iklan' => $perfMetrics['efektivitas_iklan'] ?? null, // Cocokkan dengan payload JSON
             'cir' => $perfMetrics['cir'] ?? null,
         ];
     }
