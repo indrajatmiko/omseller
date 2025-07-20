@@ -183,5 +183,40 @@ class ScrapeDataController extends Controller
         ];
     }
     
-    // (FUNGSI LAMA DIHAPUS) Fungsi flattenManualMetrics sudah tidak diperlukan lagi.
+    /**
+     * (BARU) Mempersiapkan data untuk tabel recommendation_performances dari payload yang datar.
+     */
+    private function prepareRecommendationPerformanceData(array $item): array
+    {
+        // Petakan data yang masuk ke kolom database sesuai skema recommendation_performances.
+        return [
+            'penempatan'              => $item['penempatan'] ?? null,
+            'harga_bid'               => $item['harga_bid'] ?? null,
+            'disarankan'              => $item['disarankan'] ?? null,
+            'iklan_dilihat_value'     => $item['iklan_dilihat_value'] ?? null,
+            'iklan_dilihat_delta'     => $item['iklan_dilihat_delta'] ?? null,
+            'jumlah_klik_value'       => $item['jumlah_klik_value'] ?? null,
+            'jumlah_klik_delta'       => $item['jumlah_klik_delta'] ?? null,
+            'persentase_klik_value'   => $item['persentase_klik_value'] ?? null,
+            'persentase_klik_delta'   => $item['persentase_klik_delta'] ?? null,
+            'biaya_iklan_value'       => $item['biaya_iklan_value'] ?? null,
+            'biaya_iklan_delta'       => $item['biaya_iklan_delta'] ?? null,
+            'penjualan_dari_iklan_value' => $item['penjualan_dari_iklan_value'] ?? null,
+            'penjualan_dari_iklan_delta' => $item['penjualan_dari_iklan_delta'] ?? null,
+            'konversi_value'          => $item['konversi_value'] ?? null,
+            'konversi_delta'          => $item['konversi_delta'] ?? null,
+            'produk_terjual_value'    => $item['produk_terjual_value'] ?? null,
+            'produk_terjual_delta'    => $item['produk_terjual_delta'] ?? null,
+            'roas_value'              => $item['roas_value'] ?? null,
+            'roas_delta'              => $item['roas_delta'] ?? null,
+            'acos_value'              => $item['acos_value'] ?? null,
+            'acos_delta'              => $item['acos_delta'] ?? null,
+            'tingkat_konversi_value'  => $item['tingkat_konversi_value'] ?? null,
+            'tingkat_konversi_delta'  => $item['tingkat_konversi_delta'] ?? null,
+            'biaya_per_konversi_value'=> $item['biaya_per_konversi_value'] ?? null,
+            'biaya_per_konversi_delta'=> $item['biaya_per_konversi_delta'] ?? null,
+            'peringkat_rata_rata_value' => $item['peringkat_rata_rata_value'] ?? null,
+            'peringkat_rata_rata_delta' => $item['peringkat_rata_rata_delta'] ?? null,
+        ];
+    }
 }
