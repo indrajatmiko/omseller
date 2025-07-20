@@ -98,7 +98,25 @@ class ScrapeDataController extends Controller
         ], 200);
     }
 
-    public function getScrapedDates($campaign_id) { /* ...Fungsi ini tetap sama... */ }
+    public function getScrapedDates($campaign_id)
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json([], 401); // Unauthorized
+        }
+
+        $dates = DB::table('campaign_reports')
+            ->where('user_id', $user->id)
+            ->where('campaign_id', $campaign_id)
+            ->orderBy('scrape_date', 'desc')
+            ->pluck('scrape_date');
+
+        $formattedDates = $dates->map(fn ($date) => Carbon::parse($date)->format('Y-m-d'));
+
+        // (PERBAIKAN PENTING) Gunakan ->values()->all() untuk memastikan hasilnya
+        // adalah array JSON `[]` jika kosong, bukan objek `{}`.
+        return response()->json($formattedDates->values()->all());
+    }
 
     private function getReportValues(array $data): array {
         $productInfo = $data['productInfo'] ?? [];
