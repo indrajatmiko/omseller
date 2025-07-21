@@ -16,7 +16,7 @@ class ScrapeDataController extends Controller
 {
     public function store(Request $request)
     {
-        Log::info('--- Received Scrape Request ---', $request->all());
+        // //Log::info('--- Received Scrape Request ---', $request->all());
         $validator = Validator::make($request->all(), [
             'campaign_id' => 'required|integer',
             'aggregatedData' => 'required|array|min:1',
@@ -39,7 +39,7 @@ class ScrapeDataController extends Controller
                 DB::transaction(function () use ($user, $validated, $dailyData, &$reportsCreated, &$reportsUpdated) {
                     $data = $dailyData['data'];
                     $scrapeDate = $dailyData['scrapeDate'];
-                    Log::info("Processing data for scrapeDate: {$scrapeDate}");
+                    ////Log::info("Processing data for scrapeDate: {$scrapeDate}");
 
                     $reportValues = $this->getReportValues($data);
                     $uniqueAttributes = [
@@ -52,10 +52,10 @@ class ScrapeDataController extends Controller
 
                     if ($report->wasRecentlyCreated) {
                         $reportsCreated++;
-                        Log::info("CREATED new CampaignReport ID: {$report->id}");
+                        ////Log::info("CREATED new CampaignReport ID: {$report->id}");
                     } else {
                         $reportsUpdated++;
-                        Log::info("UPDATING existing CampaignReport ID: {$report->id}. Deleting all old details...");
+                        ////Log::info("UPDATING existing CampaignReport ID: {$report->id}. Deleting all old details...");
                         $report->keywordPerformances()->delete();
                         $report->recommendationPerformances()->delete();
                         $report->gmvPerformanceDetails()->delete();
@@ -63,14 +63,14 @@ class ScrapeDataController extends Controller
                     
                     // (MODIFIKASI KUNCI) Alur Mode Manual sekarang menggunakan fungsi baru
                     if (!empty($data['keywordPerformance'])) {
-                        Log::info("Processing Manual Mode: Found " . count($data['keywordPerformance']) . " keyword performance items.");
+                        //Log::info("Processing Manual Mode: Found " . count($data['keywordPerformance']) . " keyword performance items.");
                         foreach ($data['keywordPerformance'] as $kw) {
                             // Panggil fungsi baru yang sesuai dengan struktur data flat
                             $report->keywordPerformances()->create($this->prepareKeywordPerformanceData($kw));
                         }
                     }
                     if (!empty($data['recommendationPerformance'])) {
-                        Log::info("Processing Manual Mode: Found " . count($data['recommendationPerformance']) . " recommendation performance items.");
+                        //Log::info("Processing Manual Mode: Found " . count($data['recommendationPerformance']) . " recommendation performance items.");
                         // Anda mungkin perlu membuat `prepareRecommendationPerformanceData` jika strukturnya berbeda
                         // Untuk saat ini, asumsikan strukturnya sama
                         foreach ($data['recommendationPerformance'] as $rec) {
@@ -81,7 +81,7 @@ class ScrapeDataController extends Controller
 
                     // Alur Mode GMV (tidak berubah)
                     if (!empty($data['gmvPerformance'])) {
-                        Log::info("Processing GMV Mode: Found " . count($data['gmvPerformance']) . " GMV performance items.");
+                        //Log::info("Processing GMV Mode: Found " . count($data['gmvPerformance']) . " GMV performance items.");
                         foreach ($data['gmvPerformance'] as $gmv) {
                             $report->gmvPerformanceDetails()->create($gmv);
                         }
