@@ -124,7 +124,7 @@ class ScrapeDataController extends Controller
         return [
             'date_range_text' => $productInfo['rentang_tanggal'] ?? null,
             'nama_produk' => $productInfo['nama_produk'] ?? null,
-            'gambar_url' => $productInfo['gambar'] ?? null,
+            'gambar_url' => $productInfo['gambar_url'] ?? null,
             'status_iklan' => $productInfo['status_iklan'] ?? null,
             'modal' => $productInfo['modal'] ?? null,
             'periode_iklan' => $productInfo['periode_iklan'] ?? null,

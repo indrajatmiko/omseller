@@ -35,4 +35,37 @@ class CampaignReport extends Model
     {
         return $this->hasMany(GmvPerformanceDetail::class);
     }
+
+    /**
+     * Parsing nilai 'biaya' dari format string (misal: 'Rp2.5k') menjadi float.
+     * Menggunakan accessor agar nilai ini otomatis di-parse saat diakses.
+     */
+    public function getCleanBiayaAttribute(): float
+    {
+        $value = str_replace(['Rp', '.', ' '], '', $this->attributes['biaya']);
+        if (str_ends_with(strtolower($value), 'k')) {
+            return (float) rtrim(strtolower($value), 'k') * 100;
+        }
+        return (float) $value;
+    }
+
+    /**
+     * Parsing nilai 'omzet_iklan' dari format string menjadi float.
+     */
+    public function getCleanOmzetAttribute(): float
+    {
+        $value = str_replace(['Rp', '.', ' '], '', $this->attributes['omzet_iklan']);
+        if (str_ends_with(strtolower($value), 'k')) {
+            return (float) rtrim(strtolower($value), 'k') * 100;
+        }
+        return (float) $value;
+    }
+
+    /**
+     * Parsing nilai 'efektivitas_iklan' (ROAS) dari format string '11,72' menjadi float.
+     */
+    public function getCleanRoasAttribute(): float
+    {
+        return (float) str_replace(',', '.', $this->attributes['efektivitas_iklan']);
+    }
 }
