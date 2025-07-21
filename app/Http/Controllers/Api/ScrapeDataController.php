@@ -74,7 +74,8 @@ class ScrapeDataController extends Controller
                         // Anda mungkin perlu membuat `prepareRecommendationPerformanceData` jika strukturnya berbeda
                         // Untuk saat ini, asumsikan strukturnya sama
                         foreach ($data['recommendationPerformance'] as $rec) {
-                             $report->recommendationPerformances()->create($this->prepareKeywordPerformanceData($rec)); // Gunakan fungsi yang sama
+                            // INI YANG BENAR: Memanggil fungsi yang dirancang untuk recommendation
+                            $report->recommendationPerformances()->create($this->prepareRecommendationPerformanceData($rec));
                         }
                     }
 
