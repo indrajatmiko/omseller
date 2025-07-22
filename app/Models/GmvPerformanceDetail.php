@@ -2,13 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Traits\CleansPerformanceData;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class GmvPerformanceDetail extends Model
 {
-    use HasFactory;
+    use HasFactory, CleansPerformanceData;
 
     protected $guarded = [];
 
@@ -41,19 +42,19 @@ class GmvPerformanceDetail extends Model
         return (float) $cleaned;
     }
 
-    /**
-     * [REVISI] Menggunakan parser baru.
-     */
-    public function getCleanBiayaAttribute(): float
-    {
-        return $this->parseIndonesianNumericString($this->attributes['biaya_iklan_value'] ?? '0');
-    }
+    // /**
+    //  * [REVISI] Menggunakan parser baru.
+    //  */
+    // public function getCleanBiayaAttribute(): float
+    // {
+    //     return $this->parseIndonesianNumericString($this->attributes['biaya_iklan_value'] ?? '0');
+    // }
 
-    /**
-     * [REVISI] Sumber omzet sekarang HANYA dari 'penjualan_dari_iklan_value'.
-     */
-    public function getCleanOmzetAttribute(): float
-    {
-        return $this->parseIndonesianNumericString($this->attributes['penjualan_dari_iklan_value'] ?? '0');
-    }
+    // /**
+    //  * [REVISI] Sumber omzet sekarang HANYA dari 'penjualan_dari_iklan_value'.
+    //  */
+    // public function getCleanOmzetAttribute(): float
+    // {
+    //     return $this->parseIndonesianNumericString($this->attributes['penjualan_dari_iklan_value'] ?? '0');
+    // }
 }

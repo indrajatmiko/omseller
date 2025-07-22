@@ -68,4 +68,26 @@ class CampaignReport extends Model
     {
         return (float) str_replace(',', '.', $this->attributes['efektivitas_iklan']);
     }
+
+    /**
+     * [REVISI] Accessor untuk mengekstrak nilai numerik dari string modal.
+     * Lebih andal dengan menghapus semua karakter non-digit.
+     */
+    public function getModalNumericValueAttribute(): float
+    {
+        $modalString = $this->attributes['modal'] ?? '0';
+        // Hapus semua karakter yang bukan angka
+        return (float) preg_replace('/[^\d]/', '', $modalString);
+    }
+
+    /**
+     * [PENAMBAHAN BARU] Accessor untuk menampilkan modal yang bersih.
+     * Menghapus kata "Harian " dan hanya menyisakan "Rp 100.000".
+     */
+    public function getCleanModalDisplayAttribute(): string
+    {
+        $modalString = $this->attributes['modal'] ?? 'Rp 0';
+        // Hapus "Harian " jika ada di awal string
+        return str_replace('Harian', '', $modalString);
+    }
 }

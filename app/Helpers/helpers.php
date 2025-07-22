@@ -27,4 +27,32 @@ if (!function_exists('chartComponent')) {
 
         return (object) ['options' => json_encode($options), 'series' => json_encode($series)];
     }
+
+    if (!function_exists('formatRupiahShort')) {
+        /**
+         * Mengubah angka besar menjadi format Rupiah yang ringkas (jt, M, T).
+         *
+         * @param float|int $number
+         * @return string
+         */
+        function formatRupiahShort(float|int $number): string
+        {
+            if ($number < 1000000) {
+                // Kurang dari 1 juta, format biasa
+                return 'Rp ' . number_format($number, 0, ',', '.');
+            } elseif ($number < 1000000000) {
+                // Jutaan (1jt - 999jt)
+                $formatted = number_format($number / 1000000, 1, ',', '.');
+                return 'Rp ' . rtrim(rtrim($formatted, '0'), ',') . ' jt';
+            } elseif ($number < 1000000000000) {
+                // Milyaran (1M - 999M)
+                $formatted = number_format($number / 1000000000, 2, ',', '.');
+                return 'Rp ' . rtrim(rtrim($formatted, '0'), ',') . ' M';
+            } else {
+                // Triliunan (1T+)
+                $formatted = number_format($number / 1000000000000, 2, ',', '.');
+                return 'Rp ' . rtrim(rtrim($formatted, '0'), ',') . ' T';
+            }
+        }
+    }
 }

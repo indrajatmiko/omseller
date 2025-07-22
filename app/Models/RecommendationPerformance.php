@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Traits\CleansPerformanceData;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class RecommendationPerformance extends Model
 {
-    use HasFactory;
+    use HasFactory, CleansPerformanceData;
     protected $guarded = [];
     // Hapus $casts karena tidak ada lagi kolom JSON
 

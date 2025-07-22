@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Traits\CleansPerformanceData;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class KeywordPerformance extends Model
 {
-    use HasFactory;
+    use HasFactory, CleansPerformanceData;
     protected $guarded = [];
 
     private function parseIndonesianNumericString(?string $value): float
@@ -23,14 +24,14 @@ class KeywordPerformance extends Model
         return (float) $cleaned;
     }
 
-    public function getCleanBiayaAttribute(): float
-    {
-        return $this->parseIndonesianNumericString($this->attributes['biaya_iklan_value'] ?? '0');
-    }
+    // public function getCleanBiayaAttribute(): float
+    // {
+    //     return $this->parseIndonesianNumericString($this->attributes['biaya_iklan_value'] ?? '0');
+    // }
 
-    public function getCleanOmzetAttribute(): float
-    {
-        // Keyword performance biasanya hanya punya omzet dari iklan
-        return $this->parseIndonesianNumericString($this->attributes['penjualan_dari_iklan_value'] ?? '0');
-    }
+    // public function getCleanOmzetAttribute(): float
+    // {
+    //     // Keyword performance biasanya hanya punya omzet dari iklan
+    //     return $this->parseIndonesianNumericString($this->attributes['penjualan_dari_iklan_value'] ?? '0');
+    // }
 }

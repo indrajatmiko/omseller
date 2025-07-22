@@ -43,10 +43,10 @@
                         <x-app.sidebar-link href="/voucher-ikuti" icon="phosphor-storefront" :active="(Request::is('voucher-ikuti'))">Ikuti Toko</x-app.sidebar-link>
                     </x-app.sidebar-dropdown>
                     
-                    <x-app.sidebar-dropdown text="Performa Toko" icon="phosphor-chart-line" id="datacenters_dropdown" :active="(Request::is('datacenters'))" :open="(Request::is('datacenter-organik-iklan') || Request::is('datacenter-produk') || Request::is('datacenter-ikuti')) ? '1' : '0'">
+                    <x-app.sidebar-dropdown text="Performa Toko" icon="phosphor-chart-line" id="datacenters_dropdown" :active="(Request::is('datacenters'))" :open="(Request::is('datacenter-organik-iklan') || Request::is('datacenter-produk') || Request::is('campaigns')) ? '1' : '0'">
                         <x-app.sidebar-link href="/datacenter-organik-iklan" icon="phosphor-traffic-signal" :active="(Request::is('datacenter-organik-iklan'))">Organik vs Iklan</x-app.sidebar-link>
                         <x-app.sidebar-link href="/datacenter-produk" icon="phosphor-tiktok-logo" :active="(Request::is('datacenter-produk'))">Produk</x-app.sidebar-link>
-                        <x-app.sidebar-link href="/datacenter-ikuti" icon="phosphor-storefront" :active="(Request::is('datacenter-ikuti'))">Ikuti Toko</x-app.sidebar-link>
+                        <x-app.sidebar-link href="/campaigns" icon="phosphor-storefront" :active="(Request::is('campaigns'))">Campaign</x-app.sidebar-link>
                     </x-app.sidebar-dropdown>
 
                     <x-app.sidebar-dropdown text="Sinkronisasi" icon="phosphor-arrows-clockwise" id="sinkronisasis_dropdown" :active="(Request::is('sinkronisasis'))" :open="(Request::is('sinkronisasi/pesanan-shopee') || Request::is('sinkronisasi/produk-shopee') || Request::is('datacenter-ikuti')) ? '1' : '0'">
