@@ -22,6 +22,7 @@ class ProductVariant extends Model
         'warehouse_stock',  // <-- BARU
         'reserved_stock',   // <-- BARU
         'sku_type',
+        'reseller',
     ];
 
     public function product()

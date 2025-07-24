@@ -111,7 +111,7 @@ class OrderScrapeController extends Controller
                         // Ini berlaku untuk SEMUA jenis pengiriman.
                         if (strtolower($oldStatus ?? '') === 'perlu dikirim' && strtolower($newStatus) === 'sudah kirim') {
                             $pickupTime = now(); // Set pickup_time ke waktu saat perubahan dideteksi.
-                            Log::info("Pickup detected for order {$order->shopee_order_id} (Perlu Dikirim -> Sudah Kirim). Setting pickup_time to now.");
+                            // Log::info("Pickup detected for order {$order->shopee_order_id} (Perlu Dikirim -> Sudah Kirim). Setting pickup_time to now.");
                         
                         // Prioritas 2: Jika tidak ada perubahan status di atas, coba parsing dari deskripsi.
                         // Ini berguna untuk kasus di mana scrape pertama kali langsung melihat status "Sudah Kirim".

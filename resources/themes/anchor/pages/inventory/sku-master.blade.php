@@ -118,7 +118,7 @@ new class extends Component {
         return $maxPossibleSets === PHP_INT_MAX ? 0 : (int)$maxPossibleSets;
     }
     
-    public function saveSku(string $sku): void
+public function saveSku(string $sku): void
     {
         if (empty($sku) || !isset($this->skuData[$sku])) {
             $this->cancelEditing();
@@ -126,11 +126,14 @@ new class extends Component {
         }
         $currentData = $this->skuData[$sku];
 
+        // Validasi, sekarang juga perlu 'representative_product_id'
         $rules = [
+            'representative_product_id' => 'required|exists:products,id',
             'cost_price_raw'      => 'required|numeric|min:0',
             'product_category_id' => 'nullable|exists:product_categories,id',
             'status'              => 'required|in:active,draft',
             'sku_type'            => 'required|in:mandiri,gabungan',
+            'reseller'            => 'required|boolean', // <-- TAMBAHKAN VALIDASI INI
         ];
 
         if ($currentData['sku_type'] !== 'gabungan') {
@@ -140,41 +143,54 @@ new class extends Component {
         $validated = validator($currentData, $rules)->validate();
 
         DB::transaction(function () use ($sku, $validated, $currentData) {
-            $variantsToUpdate = ProductVariant::where('variant_sku', $sku)->whereHas('product', fn($q) => $q->where('user_id', auth()->id()))->get();
-            if ($variantsToUpdate->isEmpty()) return;
+            // =======================================================
+            // PERBAIKAN UTAMA: Update produk representatif secara terpisah
+            // =======================================================
+            Product::where('id', $validated['representative_product_id'])
+                ->where('user_id', auth()->id()) // Keamanan ekstra
+                ->update([
+                        'status' => $validated['status'],
+                        'product_category_id' => $validated['product_category_id'],
+                ]);
 
-            Product::whereIn('id', $variantsToUpdate->pluck('product_id')->unique())->update([
-                'status' => $validated['status'],
-                'product_category_id' => $validated['product_category_id'],
-            ]);
-
+            // Query untuk semua varian dengan SKU ini
+            $variantsQuery = ProductVariant::where('variant_sku', $sku)
+                                        ->whereHas('product', fn($q) => $q->where('user_id', auth()->id()));
+            
+            // Logika untuk SKU Mandiri
             if ($currentData['sku_type'] !== 'gabungan') {
-                $originalStock = $variantsToUpdate->first()->warehouse_stock ?? 0;
+                $firstVariant = $variantsQuery->clone()->first();
+                $originalStock = $firstVariant->warehouse_stock ?? 0;
                 $newStock = $validated['warehouse_stock_raw'];
                 $stockDifference = $newStock - $originalStock;
                 
-                foreach ($variantsToUpdate as $variant) {
-                    $variant->update([
-                        'cost_price' => $validated['cost_price_raw'],
-                        'warehouse_stock' => $validated['warehouse_stock_raw'],
-                        'sku_type' => $validated['sku_type'],
-                    ]);
+                // Lakukan MASS UPDATE HANYA untuk data level-SKU
+                $variantsQuery->update([
+                    'cost_price' => $validated['cost_price_raw'],
+                    'warehouse_stock' => $validated['warehouse_stock_raw'],
+                    'sku_type' => $validated['sku_type'],
+                    'reseller' => $validated['reseller'],
+                ]);
+                
+                if ($firstVariant) {
+                    $this->handleStockAdjustment($firstVariant, $stockDifference, $sku);
                 }
-                $this->handleStockAdjustment($variantsToUpdate->first(), $stockDifference, $sku);
             } else {
-                 foreach ($variantsToUpdate as $variant) {
-                    $variant->update([
-                        'cost_price' => $validated['cost_price_raw'],
-                        'sku_type' => $validated['sku_type'],
-                    ]);
-                }
+                // Logika untuk SKU Gabungan (hanya update data non-stok level-SKU)
+                $variantsQuery->update([
+                    'cost_price' => $validated['cost_price_raw'],
+                    'sku_type' => $validated['sku_type'],
+                    'reseller' => $validated['reseller'],
+                ]);
             }
         });
         
+        // Update state di frontend (tidak berubah)
         $this->skuData[$sku]['cost_price_raw'] = $validated['cost_price_raw'];
         $this->skuData[$sku]['product_category_id'] = $validated['product_category_id'];
         $this->skuData[$sku]['status'] = $validated['status'];
         $this->skuData[$sku]['sku_type'] = $validated['sku_type'];
+        $this->skuData[$sku]['reseller'] = $validated['reseller'];
         
         $this->cancelEditing();
         Notification::make()->title('Update Berhasil')->success()->body("Perubahan untuk SKU '{$sku}' telah berhasil disimpan.")->send();
@@ -311,49 +327,40 @@ new class extends Component {
     public function with(): array
     {
         // ====================================================================
-        // LANGKAH 1: DAPATKAN DAFTAR SKU UNIK YANG VALID DARI DATABASE
+        // LANGKAH 1: Ambil daftar SKU unik untuk paginasi (logika ini sudah benar)
         // ====================================================================
         $baseQuery = ProductVariant::query()
             ->join('products', 'product_variants.product_id', '=', 'products.id')
             ->where('products.user_id', auth()->id())
             ->where(function ($q) {
-                $q->where('product_variants.variant_sku', '!=', '')
-                  ->whereNotNull('product_variants.variant_sku');
+                $q->where('product_variants.variant_sku', '!=', '')->whereNotNull('product_variants.variant_sku');
             });
 
-        // Terapkan filter pencarian jika ada
         if ($this->search) {
             $baseQuery->where(function ($q) {
                 $q->where('product_variants.variant_sku', 'like', '%' . $this->search . '%')
                   ->orWhere('products.product_name', 'like', '%' . $this->search . '%')
-                  ->orWhereHas('product.ProductCategory', function ($q) {
+                  ->orWhereHas('product.productCategory', function ($q) {
                       $q->where('name', 'like', '%' . $this->search . '%');
                   });
             });
         }
         
-        // Dapatkan daftar SKU unik yang sesuai dengan kriteria.
         $allMatchingUniqueSkus = $baseQuery
-            ->leftJoin('product_categories', 'products.product_category_id', '=', 'product_categories.id') // Pastikan join ke kategori
+            ->leftJoin('product_categories', 'products.product_category_id', '=', 'product_categories.id')
             ->select('product_variants.variant_sku')
             ->distinct()
-            // =======================================================
-            // PERUBAHAN UTAMA: Ubah urutan ORDER BY
-            // =======================================================
-            // 1. ISNULL() akan menempatkan produk tanpa kategori di akhir.
-            // 2. Kemudian urutkan berdasarkan nama kategori.
-            // 3. Terakhir, urutkan berdasarkan SKU.
             ->orderByRaw('ISNULL(product_categories.name), product_categories.name ASC, product_variants.variant_sku ASC')
             ->pluck('variant_sku');
 
         // ====================================================================
-        // LANGKAH 2: BUAT PAGINATOR SECARA MANUAL (Tidak ada perubahan di sini)
+        // LANGKAH 2: Buat paginator manual (logika ini sudah benar)
         // ====================================================================
         $perPage = 25;
         $currentPage = $this->getPage();
         $skusOnCurrentPage = $allMatchingUniqueSkus->slice(($currentPage - 1) * $perPage, $perPage)->values();
         
-        $paginator = new \Illuminate\Pagination\LengthAwarePaginator(
+        $paginator = new LengthAwarePaginator(
             $skusOnCurrentPage,
             $allMatchingUniqueSkus->count(),
             $perPage,
@@ -362,65 +369,71 @@ new class extends Component {
         );
 
         // ====================================================================
-        // Sisa fungsi tetap sama...
+        // LANGKAH 3: Ambil data & Siapkan data Tampilan
         // ====================================================================
         $variantsBySku = $this->getVariantsForSkus($skusOnCurrentPage->all());
-
         $summary = $this->getSummaryData();
         $initialChartData = $this->getInitialChartData($summary);
 
-        $this->skuData = [];
-        
         $bundleSkus = $variantsBySku->filter(fn($v) => $v->first() && $v->first()->sku_type === 'gabungan')->keys();
         $componentStocks = collect();
         if ($bundleSkus->isNotEmpty()) {
-            $allComponentSkus = SkuComposition::whereIn('bundle_sku', $bundleSkus)
-                ->where('user_id', auth()->id())
-                ->pluck('component_sku')
-                ->unique();
-            $componentStocks = ProductVariant::whereIn('variant_sku', $allComponentSkus)
-                 ->whereHas('product', fn($q) => $q->where('user_id', auth()->id()))
-                 ->pluck('warehouse_stock', 'variant_sku');
+            $allComponentSkus = SkuComposition::whereIn('bundle_sku', $bundleSkus)->where('user_id', auth()->id())->pluck('component_sku')->unique();
+            $componentStocks = ProductVariant::whereIn('variant_sku', $allComponentSkus)->whereHas('product', fn($q) => $q->where('user_id', auth()->id()))->pluck('warehouse_stock', 'variant_sku');
         }
 
+        // ====================================================================
+        // PERBAIKAN UTAMA: Bangun ulang data dengan pengecualian
+        // ====================================================================
+        $newSkuData = [];
         foreach ($skusOnCurrentPage as $sku) {
+            // JIKA SKU INI ADALAH YANG SEDANG DIEDIT, JANGAN AMBIL DARI DATABASE.
+            // CUKUP PERTAHANKAN STATE YANG SUDAH ADA DI MEMORI.
+            if ($sku === $this->editingSku && isset($this->skuData[$sku])) {
+                $newSkuData[$sku] = $this->skuData[$sku];
+                continue; // Lanjut ke SKU berikutnya
+            }
+
+            // Untuk semua SKU lain yang tidak sedang diedit, bangun dari DB.
             $firstVariant = $variantsBySku->get($sku)?->first();
 
             if ($firstVariant && $firstVariant->product) {
                 $firstProduct = $firstVariant->product;
-                $this->skuData[$sku] = [
+                $newSkuData[$sku] = [
+                    'representative_product_id' => $firstProduct->id,
                     'cost_price_raw' => $firstVariant->cost_price ?? 0,
                     'product_category_id' => $firstProduct->product_category_id,
                     'status' => $firstProduct->status,
                     'sku_type' => $firstVariant->sku_type,
+                    'reseller' => $firstVariant->reseller, // <-- TAMBAHKAN INI
                     'suggested_cost_price' => null,
                     'warehouse_stock_raw' => 0,
                 ];
 
                 if ($firstVariant->sku_type === 'gabungan') {
-                    $this->skuData[$sku]['suggested_cost_price'] = $this->calculateSuggestedPrice($sku);
-                    $this->skuData[$sku]['warehouse_stock_raw'] = $this->calculateBundleStock($sku, $componentStocks);
+                    $newSkuData[$sku]['suggested_cost_price'] = $this->calculateSuggestedPrice($sku);
+                    $newSkuData[$sku]['warehouse_stock_raw'] = $this->calculateBundleStock($sku, $componentStocks);
                 } else {
-                    $this->skuData[$sku]['warehouse_stock_raw'] = $firstVariant->warehouse_stock ?? 0;
+                    $newSkuData[$sku]['warehouse_stock_raw'] = $firstVariant->warehouse_stock ?? 0;
                 }
             } else {
-                \Illuminate\Support\Facades\Log::warning("SKU Master: Data tidak lengkap atau produk yatim ditemukan untuk SKU '{$sku}'. Dilewati dari tampilan.");
+                \Illuminate\Support\Facades\Log::warning("SKU Master: Data tidak lengkap untuk SKU '{$sku}'.");
             }
         }
         
-        $editingData = session('editing_sku_data');
-        if ($this->editingSku && $editingData && isset($this->skuData[$this->editingSku])) {
-             $this->skuData[$this->editingSku] = array_merge($this->skuData[$this->editingSku], $editingData);
-        }
+        // Ganti properti publik dengan data yang baru dan aman.
+        $this->skuData = $newSkuData;
 
+        // ====================================================================
+        // LANGKAH 5: Kembalikan semua data ke view
+        // ====================================================================
         return [
             'summary' => $summary,
             'initialChartData' => $initialChartData,
             'skus' => $paginator,
             'variantsBySku' => $variantsBySku,
         ];
-    }
-};
+    }};
 ?>
 
 <x-layouts.app>
@@ -602,6 +615,23 @@ new class extends Component {
                                                                         @error("skuData.{$sku}.cost_price_raw") <span class="text-red-500 text-xs mt-1">{{ $message }}</span> @enderror
                                                                     </div>
                                                                     <div>
+                                                                        <label for="sku_type-{{$sku}}" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Jenis SKU</label>
+                                                                        <select id="sku_type-{{$sku}}" wire:model.live="skuData.{{$sku}}.sku_type" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm sm:text-sm">
+                                                                            <option value="mandiri">Mandiri</option>
+                                                                            <option value="gabungan">Gabungan</option>
+                                                                        </select>
+                                                                        @if($skuData[$sku]['sku_type'] === 'gabungan')
+                                                                            <button type="button" wire:click="$dispatch('manage-composition', { sku: '{{ $sku }}' })" class="mt-2 w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                                                                                Kelola Komposisi
+                                                                            </button>
+                                                                        @endif
+                                                                    </div>
+                                                                    
+                                                                </div>
+                                                                {{-- Kolom 2 (Kategori, Status) --}}
+                                                                <div class="space-y-4">
+
+                                                                    <div>
                                                                         <label for="stock-{{$sku}}" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Stok Gudang</label>
                                                                         <input type="number" id="stock-{{$sku}}" wire:model="skuData.{{$sku}}.warehouse_stock_raw" 
                                                                                class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm sm:text-sm 
@@ -615,9 +645,31 @@ new class extends Component {
                                                                         @endif
                                                                         @error("skuData.{$sku}.warehouse_stock_raw") <span class="text-red-500 text-xs mt-1">{{ $message }}</span> @enderror
                                                                     </div>
+                                                                    
+                                                                    {{-- =================================== --}}
+                                                                    {{--   PERUBAHAN: STATUS RADIO BUTTON    --}}
+                                                                    {{-- =================================== --}}
+                                                                    <div>
+                                                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Status</label>
+                                                                        <fieldset class="mt-2">
+                                                                            <legend class="sr-only">Status</legend>
+                                                                            <div class="flex items-center space-x-4">
+                                                                                <div class="flex items-center">
+                                                                                    <input id="status-active-{{$sku}}" wire:model="skuData.{{$sku}}.status" type="radio" value="active" class="h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 focus:ring-indigo-500">
+                                                                                    <label for="status-active-{{$sku}}" class="ml-2 block text-sm text-gray-900 dark:text-gray-100">Tampil</label>
+                                                                                </div>
+                                                                                <div class="flex items-center">
+                                                                                    <input id="status-draft-{{$sku}}" wire:model="skuData.{{$sku}}.status" type="radio" value="draft" class="h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 focus:ring-indigo-500">
+                                                                                    <label for="status-draft-{{$sku}}" class="ml-2 block text-sm text-gray-900 dark:text-gray-100">Sembunyi</label>
+                                                                                </div>
+                                                                            </div>
+                                                                        </fieldset>
+                                                                    </div>
                                                                 </div>
-                                                                {{-- Kolom 2 --}}
+                                                                
+                                                                {{-- Kolom 3 (Jenis SKU, Reseller, Tombol) --}}
                                                                 <div class="space-y-4">
+
                                                                     <div>
                                                                         <label for="category-{{$sku}}" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Kategori Produk</label>
                                                                         <select id="category-{{$sku}}" wire:model="skuData.{{$sku}}.product_category_id" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm sm:text-sm">
@@ -627,31 +679,26 @@ new class extends Component {
                                                                             @endforeach
                                                                         </select>
                                                                     </div>
+                                                                    {{-- =================================== --}}
+                                                                    {{--  PERUBAHAN: RESELLER RADIO BUTTON   --}}
+                                                                    {{-- =================================== --}}
                                                                     <div>
-                                                                        <label for="status-{{$sku}}" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Status</label>
-                                                                        <select id="status-{{$sku}}" wire:model="skuData.{{$sku}}.status" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm sm:text-sm">
-                                                                            <option value="active">Tampil</option>
-                                                                            <option value="draft">Sembunyi</option>
-                                                                        </select>
+                                                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Tampil di Reseller</label>
+                                                                        <fieldset class="mt-2">
+                                                                            <legend class="sr-only">Tampil di Reseller</legend>
+                                                                            <div class="flex items-center space-x-4">
+                                                                                <div class="flex items-center">
+                                                                                    <input id="reseller-yes-{{$sku}}" wire:model="skuData.{{$sku}}.reseller" type="radio" value="1" class="h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 focus:ring-indigo-500">
+                                                                                    <label for="reseller-yes-{{$sku}}" class="ml-2 block text-sm text-gray-900 dark:text-gray-100">Ya</label>
+                                                                                </div>
+                                                                                <div class="flex items-center">
+                                                                                    <input id="reseller-no-{{$sku}}" wire:model="skuData.{{$sku}}.reseller" type="radio" value="0" class="h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 focus:ring-indigo-500">
+                                                                                    <label for="reseller-no-{{$sku}}" class="ml-2 block text-sm text-gray-900 dark:text-gray-100">Tidak</label>
+                                                                                </div>
+                                                                            </div>
+                                                                        </fieldset>
                                                                     </div>
-                                                                </div>
-                                                                {{-- Kolom 3 --}}
-                                                                <div class="space-y-4">
-                                                                    <div>
-                                                                        <label for="sku_type-{{$sku}}" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Jenis SKU</label>
-                                                                        <select id="sku_type-{{$sku}}" wire:model.live="skuData.{{$sku}}.sku_type" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm sm:text-sm">
-                                                                            <option value="mandiri">Mandiri</option>
-                                                                            <option value="gabungan">Gabungan</option>
-                                                                        </select>
-                                                                        
-                                                                        @if($skuData[$sku]['sku_type'] === 'gabungan')
-                                                                            <button type="button" 
-                                                                                    wire:click="$dispatch('manage-composition', { sku: '{{ $sku }}' })"
-                                                                                    class="mt-2 w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                                                                                Kelola Komposisi
-                                                                            </button>
-                                                                        @endif
-                                                                    </div>
+                                                                    
                                                                     <div class="flex items-end justify-end space-x-3">
                                                                         <button type="button" wire:click="cancelEditing" class="px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50">Batal</button>
                                                                         <button type="button" wire:click="saveSku('{{ $sku }}')" class="px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-black hover:bg-gray-800">Simpan</button>

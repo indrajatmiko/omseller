@@ -23,6 +23,7 @@
         "laravel/pail": "^1.2",
         "laravel/tinker": "^2.7",
         "laravel/ui": "^4.5",
+        "laravolt/indonesia": "^0.36.0",
         "livewire/livewire": "^3.0",
         "ralphjsmit/livewire-urls": "^1.4",
         "spatie/laravel-permission": "^6.4",
