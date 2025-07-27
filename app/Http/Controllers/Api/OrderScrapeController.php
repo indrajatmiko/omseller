@@ -199,6 +199,7 @@ class OrderScrapeController extends Controller
         $statusesToExclude = ['Dibatalkan', 'Belum Bayar'];
 
         $pendingOrders = Order::where('user_id', $user->id)
+            ->where('channel', 'shopee')
             ->whereNotIn('order_status', $statusesToExclude)
             // Menggunakan 'whereDoesntHave' untuk menemukan pesanan yang TIDAK memiliki relasi 'paymentDetails'
             ->where(function ($query) {
