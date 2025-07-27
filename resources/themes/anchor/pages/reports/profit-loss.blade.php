@@ -237,30 +237,23 @@ new class extends Component {
                     {{-- Kolom Kiri: Grafik Donat --}}
                     <div x-data="{
                             chart: null,
-                            // Definisikan handler di luar agar bisa diakses oleh cleanup
                             updateHandler(event) {
-                                // event.detail.monthlyRevenueAllocation adalah payload yang kita kirim dari backend
-                                // Livewire 3 membungkus payload dalam array, jadi kita ambil index 0
                                 const payload = event.detail[0] || {}; 
                                 if (this.$el && payload.monthlyRevenueAllocation) {
                                     this.renderChart(payload.monthlyRevenueAllocation);
                                 }
                             },
                             init() {
-                                // Render chart dengan data awal dari server yang sudah benar
                                 let initialData = @js($initialChartData);
                                 this.renderChart(initialData);
 
-                                // Bind 'this' agar context di dalam handler benar
                                 const boundUpdateHandler = this.updateHandler.bind(this);
-                                
-                                // Pasang listener
                                 window.addEventListener('monthly-data-updated', boundUpdateHandler);
 
-                                // Bersihkan listener saat komponen dihancurkan untuk mencegah memory leak
-                                this.$watch('$isUnloaded', () => {
+                                // Cleanup listener saat komponen dihancurkan
+                                return () => {
                                     window.removeEventListener('monthly-data-updated', boundUpdateHandler);
-                                })
+                                }
                             },
                             renderChart(data) {
                                 if (this.chart) {
