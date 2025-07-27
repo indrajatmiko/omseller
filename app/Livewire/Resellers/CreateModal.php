@@ -26,17 +26,21 @@ class CreateModal extends Component
     public $province_code = null;
     public $city_code = null;
     public $district_code = null;
+    public string $is_dropship = '0';
+    public string $dropship_name = '';
     
     protected function rules() {
         return [
             'name' => 'required|string|max:255',
             'phone' => 'nullable|string|max:20',
             'email' => 'nullable|email|max:255',
-        'province_code' => 'required|exists:indonesia_provinces,code',
-        'city_code'     => 'required|exists:indonesia_cities,code',
-        'district_code' => 'required|exists:indonesia_districts,code',
+            'province_code' => 'required|exists:indonesia_provinces,code',
+            'city_code'     => 'required|exists:indonesia_cities,code',
+            'district_code' => 'required|exists:indonesia_districts,code',
             'address' => 'nullable|string',
-            'discount_percentage' => 'required|numeric|in:0,20,25',
+            'discount_percentage' => 'required|numeric|in:0,10,20,25',
+            'is_dropship' => 'required|in:0,1',
+            'dropship_name' => 'required_if:is_dropship,1|nullable|string|max:255',
         ];
     }
     
@@ -68,15 +72,26 @@ class CreateModal extends Component
     public function updatedCityCode($value): void
     {
         if ($value) {
-            $this->districts = District::where('city_code', $value)->pluck('name', 'code');
+            $this->districts = District::where('city_code', $value)->orderBy('name')->pluck('name', 'code');
         } else {
             $this->districts = [];
         }
         $this->district_code = null;
     }
     
+    public function updatedIsDropship($value)
+    {
+        if ($value === '0') {
+            $this->dropship_name = '';
+        }
+    }
+
     public function save(): void
     {
+        if ($this->is_dropship === '0') {
+            $this->dropship_name = '';
+        }
+
         $validated = $this->validate();
         $validated['user_id'] = auth()->id();
 
@@ -92,6 +107,7 @@ class CreateModal extends Component
     private function resetForm(): void
     {
         $this->resetExcept('showModal');
+        $this->is_dropship = '0';
         $this->cities = [];
         $this->districts = [];
     }

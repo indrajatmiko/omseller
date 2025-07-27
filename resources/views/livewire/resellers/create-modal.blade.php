@@ -21,11 +21,33 @@
                                 <x-input-label for="modal_discount" value="Diskon Reseller (%)" />
                                 <x-select-input wire:model="discount_percentage" id="modal_discount" class="block mt-1 w-full" required>
                                     <option value="0">0%</option>
+                                    <option value="10">10%</option>
                                     <option value="20">20%</option>
                                     <option value="25">25%</option>
                                 </x-select-input>
                                 <x-input-error :messages="$errors->get('discount_percentage')" class="mt-2" />
                             </div>
+                            <div>
+                                <x-input-label value="Dropship?" />
+                                <div class="mt-2 flex gap-4">
+                                    <label class="flex items-center">
+                                        <input type="radio" wire:model.live="is_dropship" value="1" class="form-radio-monochrome">
+                                        <span class="ml-2 text-sm text-gray-600 dark:text-gray-300">Ya</span>
+                                    </label>
+                                    <label class="flex items-center">
+                                        <input type="radio" wire:model.live="is_dropship" value="0" class="form-radio-monochrome">
+                                        <span class="ml-2 text-sm text-gray-600 dark:text-gray-300">Tidak</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            @if($is_dropship === '1')
+                                <div x-data="{}" x-show="$wire.is_dropship" x-transition>
+                                    <x-input-label for="modal_dropship_name" value="Nama Toko Dropship" />
+                                    <x-text-input wire:model="dropship_name" id="modal_dropship_name" class="block mt-1 w-full" type="text" />
+                                    <x-input-error :messages="$errors->get('dropship_name')" class="mt-2" />
+                                </div>
+                            @endif
                         </div>
 
                         {{-- Kolom Kanan --}}

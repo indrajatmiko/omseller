@@ -30,17 +30,21 @@ new class extends Component {
     public $province_code = null;
     public $city_code = null;
     public $district_code = null;
+    public string $is_dropship = '0';
+    public string $dropship_name = '';
 
     protected function rules() {
         return [
             'name' => 'required|string|max:255',
             'phone' => 'nullable|string|max:20',
             'email' => 'nullable|email|max:255',
-        'province_code' => 'required|exists:indonesia_provinces,code',
-        'city_code'     => 'required|exists:indonesia_cities,code',
-        'district_code' => 'required|exists:indonesia_districts,code',
+            'province_code' => 'required|exists:indonesia_provinces,code',
+            'city_code'     => 'required|exists:indonesia_cities,code',
+            'district_code' => 'required|exists:indonesia_districts,code',
             'address' => 'nullable|string',
-            'discount_percentage' => 'required|numeric|in:0,20,25',
+            'discount_percentage' => 'required|numeric|in:0,10,20,25',
+            'is_dropship' => 'required|in:0,1',
+            'dropship_name' => 'required_if:is_dropship,1|nullable|string|max:255',
         ];
     }
 
@@ -65,7 +69,7 @@ new class extends Component {
     public function updatedCityCode($value): void
     {
         if ($value) {
-            $this->districts = District::where('city_code', $value)->pluck('name', 'code');
+            $this->districts = District::where('city_code', $value)->orderBy('name')->pluck('name', 'code');
         } else {
             $this->districts = [];
         }
@@ -80,6 +84,8 @@ new class extends Component {
         $this->email = $reseller->email;
         $this->address = $reseller->address;
         $this->discount_percentage = $reseller->discount_percentage;
+        $this->is_dropship = $reseller->is_dropship ? '1' : '0'; 
+        $this->dropship_name = $reseller->dropship_name;
         
         $this->province_code = $reseller->province_code;
         // Pengecekan null
@@ -92,8 +98,18 @@ new class extends Component {
         $this->district_code = $reseller->district_code;
     }
     
+    public function updatedIsDropship($value)
+    {
+        if ($value === '0') {
+            $this->dropship_name = '';
+        }
+    }
+
     public function save(): void
     {
+        if ($this->is_dropship === '0') {
+            $this->dropship_name = '';
+        }
         $validated = $this->validate();
         $validated['user_id'] = auth()->id();
 
@@ -130,6 +146,7 @@ new class extends Component {
     {
         $this->editing = null;
         $this->resetExcept('provinces');
+        $this->is_dropship = '0';
         $this->cities = [];
         $this->districts = [];
     }
@@ -185,6 +202,7 @@ new class extends Component {
                                 <x-input-label for="discount_percentage" value="Diskon Reseller (%)" />
                                 <x-select-input wire:model="discount_percentage" id="discount_percentage" class="block mt-1 w-full" required>
                                     <option value="0">0% (Tidak ada diskon)</option>
+                                    <option value="10">10%</option>
                                     <option value="20">20%</option>
                                     <option value="25">25%</option>
                                 </x-select-input>

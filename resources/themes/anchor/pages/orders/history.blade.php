@@ -122,11 +122,20 @@ new class extends Component {
 <x-layouts.app>
     @volt('orders-history')
     <x-app.container>
-        <x-app.heading 
-            title="Riwayat Pesanan Manual"
-            description="Lihat dan kelola pesanan dari channel penjualan langsung dan reseller. Klik baris untuk detail."
-        />
-
+        <div class="md:flex md:items-center md:justify-between">
+            <div class="min-w-0 flex-1">
+                <x-app.heading 
+                    title="Riwayat Pesanan Manual"
+                    description="Lihat dan kelola pesanan dari channel penjualan langsung dan reseller. Klik baris untuk detail."
+                    :border="false"
+                />
+            </div>
+            <div class="mt-4 flex md:mt-0 md:ml-4">
+                <a href="{{ route('orders.create') }}" class="w-full md:w-auto flex-shrink-0 rounded-lg bg-black dark:bg-white px-4 py-2 text-sm font-semibold text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors">
+                        Buat Pesanan Baru
+                </a>
+            </div>
+        </div>
         {{-- Filter Section --}}
         <div class="mt-6 flex flex-col sm:flex-row sm:items-center gap-4">
             <div class="flex items-center gap-2">

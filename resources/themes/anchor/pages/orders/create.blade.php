@@ -37,10 +37,10 @@ new class extends Component {
     public string $copyable_text = '';
 
     #[Livewire\Attributes\On('reseller-created')]
-    public function handleResellerCreated(int $resellerId): void
+    public function handleResellerCreated(int $reseller): void
     {
         $this->loadResellers();
-        $this->reseller_id = $resellerId;
+        $this->reseller_id = $reseller;
         $this->channel = 'reseller';
     }
     
@@ -220,7 +220,7 @@ public function saveOrder(): void
             }
         });
         Notification::make()->title('Pesanan Berhasil Disimpan')->success()->send();
-        $this->redirectRoute('dashboard', navigate: true);
+        $this->redirectRoute('orders.history', navigate: true);
     } catch (\Exception $e) {
          Notification::make()->title('Terjadi Kesalahan')->danger()->body($e->getMessage())->send();
     }
@@ -233,8 +233,20 @@ public function saveOrder(): void
     @volt('orders-create')
     <form wire:submit.prevent="saveOrder">
         <x-app.container>
-            <x-app.heading title="Buat Pesanan Baru" description="Catat penjualan dari channel reseller atau penjualan langsung." />
-            
+            <div class="md:flex md:items-center md:justify-between">
+                    <div class="min-w-0 flex-1">
+                        <x-app.heading 
+                            title="Buat Pesanan Baru"
+                            description="Catat penjualan dari channel reseller atau penjualan langsung."
+                            :border="false"
+                        />
+                    </div>
+                    <div class="mt-4 flex md:mt-0 md:ml-4">
+                        <a href="{{ route('orders.history') }}" class="w-full md:w-auto flex-shrink-0 rounded-lg bg-black dark:bg-white px-4 py-2 text-sm font-semibold text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors">
+                             Riwayat Pesanan
+                        </a>
+                    </div>
+                </div>
             <div class="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {{-- Kolom Kiri & Tengah: Form Utama --}}
                 <div class="lg:col-span-2 space-y-6">
@@ -299,8 +311,13 @@ public function saveOrder(): void
                          <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">2. Pilih Produk</h3>
                          <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-4">
                             @foreach($availableSkus as $variant)
-                                <div wire:key="sku-{{ $variant->id }}" class="border border-gray-200 dark:border-gray-700 rounded-lg p-3 flex flex-col justify-between">
-                                    <div>
+                                <div wire:key="sku-{{ $variant->id }}" 
+                                     @class([
+                                        'border border-gray-200 dark:border-gray-700 rounded-lg p-3 flex flex-col justify-between transition-colors duration-200',
+                                        // Terapkan class ini jika kuantitas di keranjang > 1
+                                        'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700' => ($cart[$variant->id]['quantity'] ?? 0) > 0,
+                                     ])
+                                >                                    <div>
                                         <p class="font-bold text-base text-gray-800 dark:text-gray-200 truncate" title="{{ $variant->variant_sku }}">{{ $variant->variant_sku }}</p>
                                         <p class="text-xs text-gray-500">Rp {{ number_format($variant->selling_price) }}</p>
                                     </div>

@@ -23,8 +23,14 @@ class Reseller extends Model
         'district_code', // <-- Diubah
         'address',
         'discount_percentage',
+        'is_dropship',
+        'dropship_name',
     ];
 
+    protected $casts = [
+        'is_dropship' => 'boolean',
+    ];
+    
     public function user()
     {
         return $this->belongsTo(User::class);
