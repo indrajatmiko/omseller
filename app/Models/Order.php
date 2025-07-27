@@ -23,7 +23,7 @@ class Order extends Model
         'order_detail_url',
         'scraped_at',
         'address_full',
-        'final_income', // Kolom baru ditambahkan
+        'final_income',
         'buyer_name',
         'is_stock_deducted',
         'channel',

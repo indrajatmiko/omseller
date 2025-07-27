@@ -109,7 +109,7 @@ new class extends Component {
             ->whereIn('channel', ['direct', 'reseller'])
             ->whereYear('order_date', $this->selectedYear)
             ->whereMonth('order_date', $this->selectedMonth)
-            ->with('reseller:id,name', 'items') 
+            ->with('reseller:id,name,is_dropship', 'items') 
             ->orderBy('order_date', 'desc')
             ->paginate(15);
             
@@ -122,6 +122,8 @@ new class extends Component {
 <x-layouts.app>
     @volt('orders-history')
     <x-app.container>
+        <div>
+        @livewire('print-label-modal')
         <div class="md:flex md:items-center md:justify-between">
             <div class="min-w-0 flex-1">
                 <x-app.heading 
@@ -190,6 +192,9 @@ new class extends Component {
                                                 @else
                                                      <span class="badge-green">Langsung</span>
                                                 @endif
+                                                @if($order->reseller?->is_dropship == '1')
+                                                    <span class="badge-red">Dropship</span>
+                                                @endif
                                             </div>
                                             <p class="text-xs text-gray-500">{{ \Carbon\Carbon::parse($order->order_date)->isoFormat('D MMM YYYY, HH:mm') }}</p>
                                         </div>
@@ -220,15 +225,13 @@ new class extends Component {
                                         
                                         {{-- Kolom 5: Aksi --}}
                                         <div class="flex items-center justify-end" @click.stop>
-                                            @if($order->order_status === 'completed')
-                                                <button 
-                                                    wire:click="cancelOrder({{ $order->id }})"
-                                                    wire:confirm="Anda yakin ingin membatalkan pesanan ini? Stok akan dikembalikan secara otomatis."
-                                                    type="button" 
-                                                    class="btn-danger-outline-sm">
-                                                    Batalkan
-                                                </button>
-                                            @endif
+                                            {{-- PERUBAHAN: Tombol Cetak di sini --}}
+                                            <button 
+                                                wire:click="$dispatch('open-print-modal', { orderId: {{ $order->id }}, dropship: {{ (int) $order->reseller?->is_dropship ?? 0 }} })"
+                                                type="button" 
+                                                class="rounded-lg bg-black dark:bg-white px-4 py-2 text-sm font-semibold text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors"> {{-- Ganti class jika perlu --}}
+                                                Cetak Label
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
@@ -259,6 +262,17 @@ new class extends Component {
                                                 </tbody>
                                             </table>
                                         </div>
+                                        <div class="mt-4 text-right">
+                                            @if($order->order_status === 'completed')
+                                                <button 
+                                                    wire:click="cancelOrder({{ $order->id }})"
+                                                    wire:confirm="Anda yakin ingin membatalkan pesanan ini? Stok akan dikembalikan."
+                                                    type="button" 
+                                                    class="px-3 py-1 border border-red-300 dark:border-red-600 text-sm font-medium rounded-md text-red-700 dark:text-red-200 bg-white dark:bg-red-700 hover:bg-red-50 dark:hover:bg-red-600 transition-colors">
+                                                    Batalkan Pesanan Ini
+                                                </button>
+                                            @endif
+                                        </div>
                                     </div>
                                 </div>
                                 @endif
@@ -278,6 +292,7 @@ new class extends Component {
                 </div>
             </div>
         </div>
+    </div>
     </x-app.container>
     @endvolt
 </x-layouts.app>

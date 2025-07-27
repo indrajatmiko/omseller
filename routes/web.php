@@ -13,6 +13,14 @@
 
 use Illuminate\Support\Facades\Route;
 use Wave\Facades\Wave;
+use App\Http\Controllers\PdfController; 
 
 // Wave routes
 Wave::routes();
+
+// Route::middleware('auth')->group(function () {
+    // ... rute-rute Anda yang lain
+    
+    Route::get('/orders/{order}/print-label', [PdfController::class, 'shippingLabel'])
+        ->name('orders.print-label');
+// });
