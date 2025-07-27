@@ -16,9 +16,9 @@ return new class extends Migration
             $table->string('email')->nullable();
 
             // Kolom untuk dependent dropdown (menggunakan ID dari package laravolt)
-            $table->foreignId('province_id')->nullable()->constrained('provinces');
-            $table->foreignId('city_id')->nullable()->constrained('cities');
-            $table->foreignId('district_id')->nullable()->constrained('districts');
+            $table->foreignId('province_id')->nullable()->constrained('indonesia_provinces');
+            $table->foreignId('city_id')->nullable()->constrained('indonesia_cities');
+            $table->foreignId('district_id')->nullable()->constrained('indonesia_districts');
             // Alamat lengkap
             $table->text('address')->nullable();
             

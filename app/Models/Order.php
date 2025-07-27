@@ -26,6 +26,13 @@ class Order extends Model
         'final_income', // Kolom baru ditambahkan
         'buyer_name',
         'is_stock_deducted',
+        'channel',
+        'reseller_id',
+        'order_date',
+        'customer_name',
+        'shipping_cost',
+        'is_stock_deducted',
+
     ];
     
     protected $casts = [
@@ -56,5 +63,10 @@ class Order extends Model
     public function statusHistories()
     {
         return $this->hasMany(OrderStatusHistory::class)->orderBy('scrape_time', 'desc');
+    }
+
+    public function reseller()
+    {
+        return $this->belongsTo(Reseller::class);
     }
 }

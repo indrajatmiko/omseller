@@ -22,7 +22,6 @@ return new class extends Migration
             $table->dateTime('order_date')->nullable()->after('shopee_order_id');
             
             // Kolom pengiriman
-            $table->string('shipping_provider')->nullable()->after('tracking_number');
             $table->decimal('shipping_cost', 15, 2)->default(0.00)->after('shipping_provider');
 
             // Buat kolom spesifik Shopee menjadi nullable
@@ -35,7 +34,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('orders', function (Blueprint $table) {
-            $table->dropColumn(['channel', 'customer_name', 'order_date', 'shipping_provider', 'shipping_cost']);
+            $table->dropColumn(['channel', 'customer_name', 'order_date', 'shipping_cost']);
             $table->dropConstrainedForeignId('reseller_id');
 
             // Kembalikan seperti semula jika perlu
