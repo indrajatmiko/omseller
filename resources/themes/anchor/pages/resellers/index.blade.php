@@ -198,7 +198,7 @@ new class extends Component {
                                 <x-text-input wire:model="email" id="email" class="block mt-1 w-full" type="email" />
                                 <x-input-error :messages="$errors->get('email')" class="mt-2" />
                             </div>
-                             <div>
+                             {{-- <div>
                                 <x-input-label for="discount_percentage" value="Diskon Reseller (%)" />
                                 <x-select-input wire:model="discount_percentage" id="discount_percentage" class="block mt-1 w-full" required>
                                     <option value="0">0% (Tidak ada diskon)</option>
@@ -207,7 +207,7 @@ new class extends Component {
                                     <option value="25">25%</option>
                                 </x-select-input>
                                 <x-input-error :messages="$errors->get('discount_percentage')" class="mt-2" />
-                            </div>
+                            </div> --}}
                         </div>
 
                         {{-- Kolom Kanan --}}
@@ -244,7 +244,12 @@ new class extends Component {
                             </div>
                              <div>
                                 <x-input-label for="address" value="Alamat Lengkap (Jalan, No. Rumah, RT/RW)" />
-                                <textarea wire:model="address" id="address" rows="3" class="input-field"></textarea>
+                                <textarea 
+                                        wire:model="address" 
+                                        id="address" 
+                                        rows="3" 
+                                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 dark:focus:ring-offset-gray-800"
+                                    ></textarea>
                                 <x-input-error :messages="$errors->get('address')" class="mt-2" />
                             </div>
                         </div>

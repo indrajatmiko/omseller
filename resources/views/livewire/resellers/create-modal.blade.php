@@ -17,7 +17,7 @@
                                 <x-text-input wire:model="phone" id="modal_phone" class="block mt-1 w-full" type="text" />
                                 <x-input-error :messages="$errors->get('phone')" class="mt-2" />
                             </div>
-                            <div>
+                            {{-- <div>
                                 <x-input-label for="modal_discount" value="Diskon Reseller (%)" />
                                 <x-select-input wire:model="discount_percentage" id="modal_discount" class="block mt-1 w-full" required>
                                     <option value="0">0%</option>
@@ -26,7 +26,7 @@
                                     <option value="25">25%</option>
                                 </x-select-input>
                                 <x-input-error :messages="$errors->get('discount_percentage')" class="mt-2" />
-                            </div>
+                            </div> --}}
                             <div>
                                 <x-input-label value="Dropship?" />
                                 <div class="mt-2 flex gap-4">
@@ -86,7 +86,7 @@
                     </div>
                      <div class="mt-4">
                         <x-input-label for="modal_address" value="Alamat Lengkap" />
-                        <textarea wire:model="address" id="modal_address" rows="2" class="input-field"></textarea>
+                        <textarea wire:model="address" id="modal_address" rows="2" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 dark:focus:ring-offset-gray-800"></textarea>
                         <x-input-error :messages="$errors->get('address')" class="mt-2" />
                     </div>
                     <div class="mt-6 flex justify-end space-x-4">

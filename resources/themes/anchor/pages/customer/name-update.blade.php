@@ -157,24 +157,37 @@ new class extends Component {
                                         </p>
                                     </div>
                                 </div>
-                                <div class="sm:col-span-2 relative">
-                                    <label for="buyer_name_{{ $order->id }}" class="sr-only">Nama Pembeli</label>
-                                    <input
-                                        type="text" id="buyer_name_{{ $order->id }}" wire:model="buyerNames.{{ $order->id }}"
-                                        wire:blur="saveBuyerName({{ $order->id }})" wire:keydown.enter="saveBuyerName({{ $order->id }})" placeholder="Ketik nama pembeli di sini..." wire:target="saveBuyerName({{ $order->id }})" 
-                                        {{-- Karena item yang 'known' sudah disembunyikan, kita tidak perlu lagi 'disabled' atau styling khusus 'known'. --}}
-                                        {{-- Cukup styling untuk input yang masih kosong. --}}
-                                        class="block w-full border rounded-lg shadow-sm focus:ring-opacity-50 transition-colors duration-200 bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-gray-100 placeholder-gray-400
-                                        @if(empty($this->buyerNames[$order->id])) border-red-400 dark:border-red-500 focus:border-red-500 dark:focus:border-red-500 focus:ring-red-500
-                                        @else border-gray-300 dark:border-gray-600 focus:border-black dark:focus:border-white focus:ring-black dark:focus:ring-white @endif"
-                                    >
-                                    <div wire:loading wire:target="saveBuyerName({{ $order->id }})" class="absolute inset-y-0 right-0 flex items-center pr-3">
-                                        <svg class="animate-spin h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                        </svg>
+                                    <div class="sm:col-span-2 relative">
+                                        <label for="buyer_name_{{ $order->id }}" class="sr-only">Nama Pembeli</label>
+                                        
+                                        {{-- Grupkan input dan tombol --}}
+                                        <div class="flex items-center space-x-2">
+                                            <input
+                                                type="text" id="buyer_name_{{ $order->id }}" wire:model="buyerNames.{{ $order->id }}"
+                                                wire:keydown.enter="saveBuyerName({{ $order->id }})" 
+                                                placeholder="Ketik nama pembeli di sini..."
+                                                class="block w-full border rounded-lg shadow-sm focus:ring-opacity-50 transition-colors duration-200 bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-gray-100 placeholder-gray-400
+                                                @if(empty($this->buyerNames[$order->id])) border-red-400 dark:border-red-500 focus:border-red-500 dark:focus:border-red-500 focus:ring-red-500
+                                                @else border-gray-300 dark:border-gray-600 focus:border-black dark:focus:border-white focus:ring-black dark:focus:ring-white @endif"
+                                            >
+                                            
+                                            {{-- Tombol Simpan Eksplisit --}}
+                                            <button 
+                                                type="button" 
+                                                wire:click="saveBuyerName({{ $order->id }})"
+                                                wire:loading.attr="disabled"
+                                                wire:target="saveBuyerName({{ $order->id }})"
+                                                class="flex-shrink-0 rounded-lg bg-black dark:bg-white px-3 py-2 text-sm font-medium text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-wait"
+                                            >
+                                                {{-- Tampilkan ikon loading atau teks "Simpan" --}}
+                                                <span wire:loading.remove wire:target="saveBuyerName({{ $order->id }})">Simpan</span>
+                                                <svg wire:loading wire:target="saveBuyerName({{ $order->id }})" class="animate-spin h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                </svg>
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
                             </div>
                         </div>
                     @empty

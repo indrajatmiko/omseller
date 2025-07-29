@@ -36,6 +36,10 @@ new class extends Component {
     public int $total_weight = 0;
     public string $copyable_text = '';
 
+    // -- PERUBAHAN: Properti baru untuk diskon otomatis & total kuantitas --
+    public int $totalQuantity = 0;
+    public int $discountPercentage = 0;
+
     #[Livewire\Attributes\On('reseller-created')]
     public function handleResellerCreated(int $reseller): void
     {
@@ -52,6 +56,7 @@ new class extends Component {
     
     private function loadResellers(): void
     {
+        // Tidak perlu lagi mengambil `discount_percentage`
         $this->resellers = Reseller::where('user_id', auth()->id())->orderBy('name')->get();
     }
     
@@ -70,21 +75,34 @@ new class extends Component {
     {
         $this->fillCartDetails();
 
+        // -- PERUBAHAN: Logika kalkulasi diskon baru --
         $this->subtotal = collect($this->cart)->sum(fn($item) => data_get($item, 'price', 0) * data_get($item, 'quantity', 0));
         $this->total_weight = collect($this->cart)->sum(fn($item) => data_get($item, 'weight', 0) * data_get($item, 'quantity', 0));
+        $this->totalQuantity = collect($this->cart)->sum(fn($item) => data_get($item, 'quantity', 0));
+
+        // Reset diskon sebelum menghitung ulang
+        $this->discountPercentage = 0;
+        $this->discount_amount = 0;
+
+        // Terapkan diskon berjenjang hanya untuk channel reseller
+        if ($this->channel === 'reseller') {
+            if ($this->totalQuantity >= 48) {
+                $this->discountPercentage = 25;
+            } elseif ($this->totalQuantity >= 6) { // Asumsi 6-47 pcs
+                $this->discountPercentage = 20;
+            } elseif ($this->totalQuantity >= 1) { // Asumsi 1-5 pcs
+                $this->discountPercentage = 10;
+            }
+        }
         
-        $discountPercentage = 0;
-        if ($this->channel === 'reseller' && $this->reseller_id) {
-            $reseller = $this->resellers->find($this->reseller_id);
-            if ($reseller) {
-                $this->discount_amount = $this->subtotal * ($reseller->discount_percentage / 100);
-                $discountPercentage = $reseller->discount_percentage;
-            } else { $this->discount_amount = 0; }
-        } else { $this->discount_amount = 0; }
+        // Hitung jumlah diskon berdasarkan persentase yang didapat
+        if ($this->discountPercentage > 0) {
+            $this->discount_amount = $this->subtotal * ($this->discountPercentage / 100);
+        }
 
         $this->grand_total = $this->subtotal - $this->discount_amount;
         
-        $this->generateCopyableText($discountPercentage);
+        $this->generateCopyableText();
         
         Notification::make()->title('Perhitungan Selesai')->success()->body('Total pesanan telah diperbarui.')->send();
     }
@@ -118,7 +136,8 @@ new class extends Component {
         $this->cart = $cartWithDetails;
     }
     
-    protected function generateCopyableText(float $discountPercentage): void
+    // -- PERUBAHAN: Tidak perlu argumen, gunakan properti komponen --
+    protected function generateCopyableText(): void
     {
         $text = "_Bismillah_...\n\n";
         $text .= "*RO Produk:*\n";
@@ -130,7 +149,8 @@ new class extends Component {
         }
         $text .= "\n";
         $text .= "Subtotal: Rp " . number_format($this->subtotal, 0, ',', '.') . "\n";
-        $text .= "Diskon [{$discountPercentage} %]: Rp " . number_format($this->discount_amount, 0, ',', '.') . "\n";
+        // -- PERUBAHAN: Tampilkan persentase diskon dari properti --
+        $text .= "Diskon ({$this->discountPercentage}%): -Rp " . number_format($this->discount_amount, 0, ',', '.') . "\n";
         $text .= "Ongkos Kirim: Rp " . number_format($this->shipping_cost, 0, ',', '.') . "\n";
         $totalTagihan = $this->grand_total + $this->shipping_cost;
         $text .= "*Total: Rp " . number_format($totalTagihan, 0, ',', '.') . "*\n\n";
@@ -143,88 +163,75 @@ new class extends Component {
         $this->copyable_text = $text;
     }
 
-public function saveOrder(): void
-{
-    $this->processCartAndCalculate();
-    
-    $this->validate([
-        'channel' => 'required|in:direct,reseller',
-        'reseller_id' => 'required_if:channel,reseller|nullable|exists:resellers,id',
-        'customer_name' => 'required_if:channel,direct|nullable|string|max:255',
-        'cart' => 'required|array|min:1',
-        'shipping_cost' => 'nullable|numeric|min:0',
-    ]);
-    
-    try {
-        DB::transaction(function () {
-            // PERBAIKAN UTAMA ADA DI BLOK INI
-            $order = Order::create([
-                'user_id' => auth()->id(),
-
-                // 1. Secara eksplisit set 'channel' dari properti komponen
-                'channel' => $this->channel, 
-
-                // 2. Set 'reseller_id' jika channel adalah 'reseller'
-                'reseller_id' => $this->channel === 'reseller' ? $this->reseller_id : null,
-                
-                // 3. Set 'customer_name' berdasarkan channel
-                'customer_name' => $this->channel === 'direct' ? $this->customer_name : $this->resellers->find($this->reseller_id)?->name,
-                
-                // 4. Set 'order_date' dengan waktu saat ini
-                'order_date' => now(), 
-
-                // 5. Set 'status' menjadi 'completed' sebagai default untuk penjualan ini
-                'order_status' => 'completed',
-                
-                'total_price' => $this->grand_total,
-                'shipping_provider' => $this->shipping_provider,
-                'tracking_number' => $this->tracking_number,
-                'shipping_cost' => $this->shipping_cost,
-                'is_stock_deducted' => true,
-            ]);
-
-            // dd($order);
-
-            foreach ($this->cart as $item) {
-                $order->items()->create([
-                    'product_variant_id' => $item['id'],
-                    'variant_sku' => $item['sku'],
-                    'product_name' => $item['name'],
-                    'price' => $item['price'],
-                    'quantity' => $item['quantity'],
-                    'subtotal' => $item['price'] * $item['quantity'],
-                ]);
-
-                $variant = ProductVariant::find($item['id']);
-                if ($variant) {
-                    StockMovement::create([
-                        'user_id' => auth()->id(),
-                        'product_variant_id' => $variant->id,
-                        'order_id' => $order->id,
-                        'type' => 'sale',
-                        'quantity' => -$item['quantity'],
-                        'notes' => 'Penjualan '.ucfirst($this->channel).' #'.$order->id,
-                    ]);
-                    $variant->updateWarehouseStock(); 
-                }
-            }
-
-            if ($this->shipping_cost > 0) {
-                Expense::create([
+    public function saveOrder(): void
+    {
+        // proses kalkulasi dijalankan dulu untuk memastikan data final
+        $this->processCartAndCalculate();
+        
+        $this->validate([
+            'channel' => 'required|in:direct,reseller',
+            'reseller_id' => 'required_if:channel,reseller|nullable|exists:resellers,id',
+            'customer_name' => 'required_if:channel,direct|nullable|string|max:255',
+            'cart' => 'required|array|min:1',
+            'shipping_cost' => 'nullable|numeric|min:0',
+        ]);
+        
+        try {
+            DB::transaction(function () {
+                $order = Order::create([
                     'user_id' => auth()->id(),
-                    'category' => 'Biaya Pengiriman',
-                    'description' => 'Ongkir Pesanan #'.$order->id.($order->customer_name ? ' a/n '.$order->customer_name : ''),
-                    'amount' => $this->shipping_cost,
-                    'transaction_date' => now(),
+                    'channel' => $this->channel, 
+                    'reseller_id' => $this->channel === 'reseller' ? $this->reseller_id : null,
+                    'customer_name' => $this->channel === 'direct' ? $this->customer_name : $this->resellers->find($this->reseller_id)?->name,
+                    'order_date' => now(), 
+                    'order_status' => 'completed',
+                    'total_price' => $this->grand_total,
+                    'shipping_provider' => $this->shipping_provider,
+                    'tracking_number' => $this->tracking_number,
+                    'shipping_cost' => $this->shipping_cost,
+                    'is_stock_deducted' => true,
                 ]);
-            }
-        });
-        Notification::make()->title('Pesanan Berhasil Disimpan')->success()->send();
-        $this->redirectRoute('orders.history', navigate: true);
-    } catch (\Exception $e) {
-         Notification::make()->title('Terjadi Kesalahan')->danger()->body($e->getMessage())->send();
+
+                foreach ($this->cart as $item) {
+                    $order->items()->create([
+                        'product_variant_id' => $item['id'],
+                        'variant_sku' => $item['sku'],
+                        'product_name' => $item['name'],
+                        'price' => $item['price'],
+                        'quantity' => $item['quantity'],
+                        'subtotal' => $item['price'] * $item['quantity'],
+                    ]);
+
+                    $variant = ProductVariant::find($item['id']);
+                    if ($variant) {
+                        StockMovement::create([
+                            'user_id' => auth()->id(),
+                            'product_variant_id' => $variant->id,
+                            'order_id' => $order->id,
+                            'type' => 'sale',
+                            'quantity' => -$item['quantity'],
+                            'notes' => 'Penjualan '.ucfirst($this->channel).' #'.$order->id,
+                        ]);
+                        $variant->updateWarehouseStock(); 
+                    }
+                }
+
+                if ($this->shipping_cost > 0) {
+                    Expense::create([
+                        'user_id' => auth()->id(),
+                        'category' => 'Biaya Pengiriman',
+                        'description' => 'Ongkir Pesanan #'.$order->id.($order->customer_name ? ' a/n '.$order->customer_name : ''),
+                        'amount' => $this->shipping_cost,
+                        'transaction_date' => now(),
+                    ]);
+                }
+            });
+            Notification::make()->title('Pesanan Berhasil Disimpan')->success()->send();
+            $this->redirectRoute('orders.history', navigate: true);
+        } catch (\Exception $e) {
+            Notification::make()->title('Terjadi Kesalahan')->danger()->body($e->getMessage())->send();
+        }
     }
-}
 };
 ?>
 
@@ -282,7 +289,8 @@ public function saveOrder(): void
                                         <x-select-input wire:model.live="reseller_id" id="reseller_id" class="block w-full">
                                             <option value="">-- Pilih Reseller --</option>
                                             @forelse($resellers as $reseller)
-                                                <option value="{{ $reseller->id }}">{{ $reseller->name }} ({{ $reseller->discount_percentage }}%)</option>
+                                                {{-- PERUBAHAN: Hilangkan info diskon dari nama reseller --}}
+                                                <option value="{{ $reseller->id }}">{{ $reseller->name }}</option>
                                             @empty
                                                 <option value="" disabled>Belum ada reseller</option>
                                             @endforelse
@@ -293,6 +301,14 @@ public function saveOrder(): void
                                     </div>
                                     <x-input-error :messages="$errors->get('reseller_id')" class="mt-2" />
                                 </div>
+                            @endif
+
+                             {{-- PERUBAHAN: Input Diskon Otomatis --}}
+                            @if($channel === 'reseller')
+                            <div>
+                                <x-input-label for="discount_percentage" value="Diskon Otomatis (%)" />
+                                <x-text-input wire:model="discountPercentage" id="discount_percentage" class="block mt-1 w-full bg-gray-100 dark:bg-gray-700" type="number" readonly />
+                            </div>
                             @endif
 
                              <div>
@@ -306,15 +322,13 @@ public function saveOrder(): void
                         </div>
                     </div>
 
-                    {{-- Card Keranjang --}}
                     <div class="p-4 sm:p-6 bg-white dark:bg-gray-800 rounded-lg shadow">
                          <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">2. Pilih Produk</h3>
-                         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                         <div class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-2 gap-4">
                             @foreach($availableSkus as $variant)
                                 <div wire:key="sku-{{ $variant->id }}" 
                                      @class([
                                         'border border-gray-200 dark:border-gray-700 rounded-lg p-3 flex flex-col justify-between transition-colors duration-200',
-                                        // Terapkan class ini jika kuantitas di keranjang > 1
                                         'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700' => ($cart[$variant->id]['quantity'] ?? 0) > 0,
                                      ])
                                 >                                    <div>
@@ -351,12 +365,16 @@ public function saveOrder(): void
                 {{-- Kolom Kanan: Ringkasan & Format Pesan --}}
                 <div class="lg:col-span-1">
                     <div class="sticky top-24 space-y-6">
-                        {{-- Card Ringkasan --}}
                         <div class="p-4 sm:p-6 bg-white dark:bg-gray-800 rounded-lg shadow space-y-4">
                             <h3 class="text-lg font-medium text-gray-900 dark:text-white">3. Ringkasan</h3>
+                            {{-- PERUBAHAN: Tambah info total item dan persentase diskon --}}
                             <div class="space-y-2 text-sm">
+                                <div class="flex justify-between text-gray-600 dark:text-gray-300"><span>Total Item</span><span>{{ $totalQuantity }} pcs</span></div>
                                 <div class="flex justify-between text-gray-600 dark:text-gray-300"><span>Subtotal</span><span>Rp {{ number_format($subtotal) }}</span></div>
-                                <div class="flex justify-between text-gray-600 dark:text-gray-300"><span>Diskon</span><span class="text-gray-800 dark:text-gray-200 font-medium">- Rp {{ number_format($discount_amount) }}</span></div>
+                                <div class="flex justify-between text-gray-600 dark:text-gray-300">
+                                    <span>Diskon ({{ $discountPercentage }}%)</span>
+                                    <span class="text-gray-800 dark:text-gray-200 font-medium">- Rp {{ number_format($discount_amount) }}</span>
+                                </div>
                             </div>
                             
                              <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
@@ -384,7 +402,6 @@ public function saveOrder(): void
                             </button>
                         </div>
 
-                        {{-- Area Teks untuk Disalin --}}
                         @if(!empty($cart))
                             <div 
                                 x-data="{ 
