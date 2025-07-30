@@ -9,7 +9,6 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Support\Facades\Log;
 
 middleware('auth');
 name('customer-name-update');
@@ -35,30 +34,25 @@ new class extends Component {
 
     public function saveBuyerName(int $orderId): void
     {
-        // Log untuk melihat apakah method ini terpanggil dan siapa penggunanya
-        Log::info('saveBuyerName dipanggil untuk order ID: ' . $orderId, [
-            'auth_check' => auth()->check(),
-            'auth_id' => auth()->id(),
-            'input_data' => $this->buyerNames[$orderId] ?? 'N/A'
-        ]);
-
         $order = Order::find($orderId);
         // Pastikan order ada dan milik user yang login
-        if (!$order || $order->user_id != auth()->id()) {
-            // Log jika validasi gagal
-            Log::warning('Validasi saveBuyerName gagal.', [
-                'order_found' => (bool)$order,
-                'order_user_id' => $order ? $order->user_id : 'N/A',
-                'auth_id' => auth()->id()
-            ]);
+        if (!$order || $order->user_id !== auth()->id()) {
             return;
         }
 
         $nameToSave = trim($this->buyerNames[$orderId] ?? '');
 
         if (!empty($nameToSave)) {
-            // ... logika simpan ...
-            Log::info('Data berhasil disimpan untuk order ID: ' . $orderId);
+            // Logika untuk menyimpan profil tetap sama
+            BuyerProfile::updateOrCreate(
+                ['user_id' => auth()->id(), 'buyer_username' => $order->buyer_username, 'address_identifier' => sha1(trim($order->address_full))],
+                ['buyer_real_name' => $nameToSave]
+            );
+            if ($order->buyer_name !== $nameToSave) {
+                 $order->update(['buyer_name' => $nameToSave]);
+            }
+            // Setelah disimpan, item ini akan otomatis hilang dari daftar saat komponen re-render,
+            // jadi tidak perlu aksi tambahan.
         }
     }
 
@@ -143,10 +137,6 @@ new class extends Component {
 </div>
 
                 <div class="mt-4 space-y-3 sm:space-y-4">
-                    {{-- Menampilkan IP server --}}
-                    <div class="text-xs text-gray-500 mt-2">
-                        Server IP: {{ request()->server('SERVER_ADDR') ?? $_SERVER['SERVER_ADDR'] ?? 'Tidak diketahui' }}
-                    </div>
                     <h3 class="text-base font-semibold text-gray-500 dark:text-gray-400 mb-3">
                                     Pelanggan dengan Pesanan (2 Hari Terakhir)
                                 </h3>
