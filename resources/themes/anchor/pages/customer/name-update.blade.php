@@ -44,7 +44,7 @@ new class extends Component {
 
         $order = Order::find($orderId);
         // Pastikan order ada dan milik user yang login
-        if (!$order || $order->user_id !== auth()->id()) {
+        if (!$order || $order->user_id != auth()->id()) {
             // Log jika validasi gagal
             Log::warning('Validasi saveBuyerName gagal.', [
                 'order_found' => (bool)$order,
