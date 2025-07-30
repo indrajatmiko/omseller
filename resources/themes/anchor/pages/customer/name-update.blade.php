@@ -143,6 +143,10 @@ new class extends Component {
 </div>
 
                 <div class="mt-4 space-y-3 sm:space-y-4">
+                    {{-- Menampilkan IP server --}}
+                    <div class="text-xs text-gray-500 mt-2">
+                        Server IP: {{ request()->server('SERVER_ADDR') ?? $_SERVER['SERVER_ADDR'] ?? 'Tidak diketahui' }}
+                    </div>
                     <h3 class="text-base font-semibold text-gray-500 dark:text-gray-400 mb-3">
                                     Pelanggan dengan Pesanan (2 Hari Terakhir)
                                 </h3>
