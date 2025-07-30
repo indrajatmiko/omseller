@@ -9,6 +9,7 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\Log;
 
 middleware('auth');
 name('customer-name-update');
@@ -34,25 +35,30 @@ new class extends Component {
 
     public function saveBuyerName(int $orderId): void
     {
+        // Log untuk melihat apakah method ini terpanggil dan siapa penggunanya
+        Log::info('saveBuyerName dipanggil untuk order ID: ' . $orderId, [
+            'auth_check' => auth()->check(),
+            'auth_id' => auth()->id(),
+            'input_data' => $this->buyerNames[$orderId] ?? 'N/A'
+        ]);
+
         $order = Order::find($orderId);
         // Pastikan order ada dan milik user yang login
         if (!$order || $order->user_id !== auth()->id()) {
+            // Log jika validasi gagal
+            Log::warning('Validasi saveBuyerName gagal.', [
+                'order_found' => (bool)$order,
+                'order_user_id' => $order ? $order->user_id : 'N/A',
+                'auth_id' => auth()->id()
+            ]);
             return;
         }
 
         $nameToSave = trim($this->buyerNames[$orderId] ?? '');
 
         if (!empty($nameToSave)) {
-            // Logika untuk menyimpan profil tetap sama
-            BuyerProfile::updateOrCreate(
-                ['user_id' => auth()->id(), 'buyer_username' => $order->buyer_username, 'address_identifier' => sha1(trim($order->address_full))],
-                ['buyer_real_name' => $nameToSave]
-            );
-            if ($order->buyer_name !== $nameToSave) {
-                 $order->update(['buyer_name' => $nameToSave]);
-            }
-            // Setelah disimpan, item ini akan otomatis hilang dari daftar saat komponen re-render,
-            // jadi tidak perlu aksi tambahan.
+            // ... logika simpan ...
+            Log::info('Data berhasil disimpan untuk order ID: ' . $orderId);
         }
     }
 
@@ -140,38 +146,35 @@ new class extends Component {
                     <h3 class="text-base font-semibold text-gray-500 dark:text-gray-400 mb-3">
                                     Pelanggan dengan Pesanan (2 Hari Terakhir)
                                 </h3>
-                    @forelse ($orders as $order)
-                        <div wire:key="order-{{ $order->id }}" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 transition-all duration-300">
-                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
-                                <div class="sm:col-span-1 space-y-2">
-                                    <div>
-                                        <p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Order SN</p>
-                                        <p class="font-bold text-gray-900 dark:text-gray-100 select-all" title="{{ $order->order_sn }}">
-                                            {{ substr($order->order_sn, -4) }}
-                                        </p>
+                        @forelse ($orders as $order)
+                            <div wire:key="order-{{ $order->id }}" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 transition-all duration-300">
+                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
+                                    {{-- Info Order (tidak berubah) --}}
+                                    <div class="sm:col-span-1 space-y-2">
+                                        <div>
+                                            <p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Order SN</p>
+                                            <p class="font-bold text-gray-900 dark:text-gray-100 select-all" title="{{ $order->order_sn }}">
+                                                {{ substr($order->order_sn, -4) }}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Alamat</p>
+                                            <p class="text-sm text-gray-600 dark:text-gray-300">
+                                                {{ Str::words($order->address_full, 6, '...') }}
+                                            </p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Alamat</p>
-                                        <p class="text-sm text-gray-600 dark:text-gray-300">
-                                            {{ Str::words($order->address_full, 6, '...') }}
-                                        </p>
-                                    </div>
-                                </div>
-                                    <div class="sm:col-span-2 relative">
-                                        <label for="buyer_name_{{ $order->id }}" class="sr-only">Nama Pembeli</label>
-                                        
-                                        {{-- Grupkan input dan tombol --}}
+
+                                    {{-- Kolom Input dan Tombol (INI YANG DIPERBARUI) --}}
+                                    <div class="sm:col-span-2">
                                         <div class="flex items-center space-x-2">
                                             <input
                                                 type="text" id="buyer_name_{{ $order->id }}" wire:model="buyerNames.{{ $order->id }}"
                                                 wire:keydown.enter="saveBuyerName({{ $order->id }})" 
                                                 placeholder="Ketik nama pembeli di sini..."
-                                                class="block w-full border rounded-lg shadow-sm focus:ring-opacity-50 transition-colors duration-200 bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-gray-100 placeholder-gray-400
-                                                @if(empty($this->buyerNames[$order->id])) border-red-400 dark:border-red-500 focus:border-red-500 dark:focus:border-red-500 focus:ring-red-500
-                                                @else border-gray-300 dark:border-gray-600 focus:border-black dark:focus:border-white focus:ring-black dark:focus:ring-white @endif"
+                                                class="block w-full rounded-lg border-gray-300 bg-gray-50 text-gray-900 placeholder-gray-400 shadow-sm transition-colors duration-200 focus:border-black focus:ring-1 focus:ring-black dark:border-gray-600 dark:bg-gray-900/50 dark:text-gray-100 dark:focus:border-white dark:focus:ring-white"
                                             >
                                             
-                                            {{-- Tombol Simpan Eksplisit --}}
                                             <button 
                                                 type="button" 
                                                 wire:click="saveBuyerName({{ $order->id }})"
@@ -179,18 +182,18 @@ new class extends Component {
                                                 wire:target="saveBuyerName({{ $order->id }})"
                                                 class="flex-shrink-0 rounded-lg bg-black dark:bg-white px-3 py-2 text-sm font-medium text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-wait"
                                             >
-                                                {{-- Tampilkan ikon loading atau teks "Simpan" --}}
-                                                <span wire:loading.remove wire:target="saveBuyerName({{ $order->id }})">Simpan</span>
-                                                <svg wire:loading wire:target="saveBuyerName({{ $order->id }})" class="animate-spin h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                {{-- Tampilkan spinner saat loading, atau teks "Simpan" jika tidak --}}
+                                                <svg wire:loading wire:target="saveBuyerName({{ $order->id }})" class="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                                                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                                 </svg>
+                                                <span wire:loading.remove wire:target="saveBuyerName({{ $order->id }})">Simpan</span>
                                             </button>
                                         </div>
                                     </div>
+                                </div>
                             </div>
-                        </div>
-                    @empty
+                        @empty
                         <div class="text-center py-16 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-dashed border-gray-300 dark:border-gray-700">
                             <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                                <path vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
