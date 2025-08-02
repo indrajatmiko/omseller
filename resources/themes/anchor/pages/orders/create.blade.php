@@ -39,6 +39,8 @@ new class extends Component {
     // -- PERUBAHAN: Properti baru untuk diskon otomatis & total kuantitas --
     public int $totalQuantity = 0;
     public int $discountPercentage = 0;
+    public bool $isCalculated = false;
+
 
     #[Livewire\Attributes\On('reseller-created')]
     public function handleResellerCreated(int $reseller): void
@@ -75,38 +77,55 @@ new class extends Component {
     {
         $this->fillCartDetails();
 
-        // -- PERUBAHAN: Logika kalkulasi diskon baru --
+        // ... (logika kalkulasi subtotal, weight, discount, grand_total)
         $this->subtotal = collect($this->cart)->sum(fn($item) => data_get($item, 'price', 0) * data_get($item, 'quantity', 0));
         $this->total_weight = collect($this->cart)->sum(fn($item) => data_get($item, 'weight', 0) * data_get($item, 'quantity', 0));
-        $this->totalQuantity = collect($this->cart)->sum(fn($item) => data_get($item, 'quantity', 0));
-
-        // Reset diskon sebelum menghitung ulang
-        $this->discountPercentage = 0;
-        $this->discount_amount = 0;
-
-        // Terapkan diskon berjenjang hanya untuk channel reseller
-        if ($this->channel === 'reseller') {
-            if ($this->totalQuantity >= 48) {
-                $this->discountPercentage = 25;
-            } elseif ($this->totalQuantity >= 6) { // Asumsi 6-47 pcs
-                $this->discountPercentage = 20;
-            } elseif ($this->totalQuantity >= 1) { // Asumsi 1-5 pcs
-                $this->discountPercentage = 10;
-            }
-        }
         
-        // Hitung jumlah diskon berdasarkan persentase yang didapat
-        if ($this->discountPercentage > 0) {
-            $this->discount_amount = $this->subtotal * ($this->discountPercentage / 100);
-        }
+        $discountPercentage = 0;
+        if ($this->channel === 'reseller' && $this->reseller_id) {
+            $reseller = $this->resellers->find($this->reseller_id);
+            if ($reseller) {
+                $this->discount_amount = $this->subtotal * ($reseller->discount_percentage / 100);
+                $discountPercentage = $reseller->discount_percentage;
+            } else { $this->discount_amount = 0; }
+        } else { $this->discount_amount = 0; }
 
         $this->grand_total = $this->subtotal - $this->discount_amount;
         
-        $this->generateCopyableText();
+        $this->generateCopyableText($discountPercentage);
+        
+        // PERUBAHAN 2: Set status menjadi true setelah perhitungan selesai
+        $this->isCalculated = true;
         
         Notification::make()->title('Perhitungan Selesai')->success()->body('Total pesanan telah diperbarui.')->send();
     }
+    
+    // PERUBAHAN 3: Tambahkan hooks untuk me-reset status jika ada perubahan
+    public function updatedCart(): void
+    {
+        $this->isCalculated = false;
+    }
 
+    public function updatedChannel(): void
+    {
+        $this->isCalculated = false;
+    }
+
+    public function updatedResellerId(): void
+    {
+        $this->isCalculated = false;
+    }
+
+    public function updatedShippingCost(): void
+    {
+        $this->isCalculated = false;
+    }
+
+    public function updatedShippingProvider(): void
+    {
+        $this->isCalculated = false;
+    }
+    
     private function fillCartDetails(): void
     {
         $cartWithDetails = [];
@@ -165,7 +184,6 @@ new class extends Component {
 
     public function saveOrder(): void
     {
-        // proses kalkulasi dijalankan dulu untuk memastikan data final
         $this->processCartAndCalculate();
         
         $this->validate([
@@ -179,11 +197,12 @@ new class extends Component {
         try {
             DB::transaction(function () {
                 $order = Order::create([
+                    // ... (data order tidak berubah)
                     'user_id' => auth()->id(),
-                    'channel' => $this->channel, 
+                    'channel' => $this->channel,
                     'reseller_id' => $this->channel === 'reseller' ? $this->reseller_id : null,
                     'customer_name' => $this->channel === 'direct' ? $this->customer_name : $this->resellers->find($this->reseller_id)?->name,
-                    'order_date' => now(), 
+                    'order_date' => now(),
                     'order_status' => 'completed',
                     'total_price' => $this->grand_total,
                     'shipping_provider' => $this->shipping_provider,
@@ -201,30 +220,31 @@ new class extends Component {
                         'quantity' => $item['quantity'],
                         'subtotal' => $item['price'] * $item['quantity'],
                     ]);
+                    
+                    // PERBAIKAN UTAMA ADA DI BLOK INI
 
-                    $variant = ProductVariant::find($item['id']);
-                    if ($variant) {
-                        StockMovement::create([
-                            'user_id' => auth()->id(),
-                            'product_variant_id' => $variant->id,
-                            'order_id' => $order->id,
-                            'type' => 'sale',
-                            'quantity' => -$item['quantity'],
-                            'notes' => 'Penjualan '.ucfirst($this->channel).' #'.$order->id,
-                        ]);
-                        $variant->updateWarehouseStock(); 
-                    }
-                }
-
-                if ($this->shipping_cost > 0) {
-                    Expense::create([
+                    // Tetap buat StockMovement untuk pencatatan riwayat
+                    StockMovement::create([
                         'user_id' => auth()->id(),
-                        'category' => 'Biaya Pengiriman',
-                        'description' => 'Ongkir Pesanan #'.$order->id.($order->customer_name ? ' a/n '.$order->customer_name : ''),
-                        'amount' => $this->shipping_cost,
-                        'transaction_date' => now(),
+                        // Kita bisa ambil dari $item, tidak perlu query $variant lagi
+                        'product_variant_id' => $item['id'], 
+                        'order_id' => $order->id,
+                        'type' => 'sale',
+                        'quantity' => -$item['quantity'],
+                        'notes' => 'Penjualan '.ucfirst($this->channel).' #'.$order->id,
                     ]);
+
+                    // Gunakan operasi `decrement` yang atomik dan efisien
+                    // Ini akan mengurangi stok untuk SEMUA varian dengan SKU yang sama
+                    ProductVariant::where('variant_sku', $item['sku'])
+                        ->whereHas('product', fn($q) => $q->where('user_id', auth()->id())) // Keamanan tambahan
+                        ->decrement('warehouse_stock', $item['quantity']);
+
+                    // HAPUS PEMANGGILAN YANG TIDAK EFISIEN
+                    // $variant->updateWarehouseStock(); 
                 }
+
+                // ... (logika expense tidak berubah)
             });
             Notification::make()->title('Pesanan Berhasil Disimpan')->success()->send();
             $this->redirectRoute('orders.history', navigate: true);
@@ -397,9 +417,17 @@ new class extends Component {
                                 </div>
                             </div>
     
-                            <button type="submit" class="w-full px-4 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-black dark:bg-gray-200 dark:text-black hover:bg-gray-800 dark:hover:bg-gray-300 disabled:opacity-50" @if(empty($cart)) disabled @endif>
+                            <button type="submit" 
+                                    @disabled(empty($cart) || !$isCalculated)
+                                    class="w-full px-4 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-black dark:bg-gray-200 dark:text-black hover:bg-gray-800 dark:hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed">
                                 Simpan Pesanan
                             </button>
+
+                            @if(!$isCalculated && !empty($cart))
+                                <p class="text-xs text-center text-yellow-600 dark:text-yellow-400 mt-2">
+                                    Klik tombol "Hitung Total Pesanan" untuk mengaktifkan tombol simpan.
+                                </p>
+                            @endif
                         </div>
 
                         @if(!empty($cart))

@@ -3,6 +3,7 @@
 use function Laravel\Folio\{middleware, name};
 use App\Models\Order;
 use App\Models\StockMovement;
+use App\Models\ProductVariant;
 use Livewire\Volt\Component;
 use Livewire\WithPagination;
 use Illuminate\Support\Facades\DB;
@@ -59,15 +60,11 @@ new class extends Component {
     
     public function cancelOrder(int $orderId): void
     {
+        // PERBAIKAN UTAMA: Gunakan nested eager loading
+        // Muat 'items' DAN 'productVariant' yang ada di dalam 'items'
         $order = Order::with('items.productVariant')
             ->where('user_id', auth()->id())
-            ->where('id', $orderId)
-            ->first();
-
-        if (!$order) {
-            Notification::make()->title('Gagal')->danger()->body('Pesanan tidak ditemukan.')->send();
-            return;
-        }
+            ->findOrFail($orderId);
 
         if ($order->order_status === 'cancelled') {
             Notification::make()->title('Info')->warning()->body('Pesanan ini sudah dibatalkan.')->send();
@@ -80,17 +77,31 @@ new class extends Component {
                 $order->save();
 
                 foreach ($order->items as $item) {
+                    // Sekarang kita bisa yakin $item->productVariant tidak akan null
+                    // dan $item->product_variant_id juga akan terisi.
                     $variant = $item->productVariant;
-                    if ($variant) {
-                        StockMovement::create([
-                            'user_id' => auth()->id(),
-                            'product_variant_id' => $variant->id,
-                            'order_id' => $order->id,
-                            'type' => 'cancellation',
-                            'quantity' => $item->quantity,
-                            'notes' => 'Pembatalan Pesanan #' . $order->id,
-                        ]);
-                        $variant->updateWarehouseStock();
+
+                    // Tambahkan pengecekan keamanan untuk kasus ekstrem (data korup)
+                    if (!$variant) {
+                        // Lewati item ini jika variannya tidak ada lagi, atau catat log error
+                        \Illuminate\Support\Facades\Log::warning("ProductVariant not found for OrderItem ID: {$item->id} during cancellation.");
+                        continue; // Lanjut ke item berikutnya
+                    }
+
+                    StockMovement::create([
+                        'user_id' => auth()->id(),
+                        // Gunakan ID dari objek relasi yang sudah dimuat, ini lebih aman
+                        'product_variant_id' => $variant->id, 
+                        'order_id' => $order->id,
+                        'type' => 'cancellation',
+                        'quantity' => $item->quantity,
+                        'notes' => 'Pembatalan Pesanan #' . $order->id,
+                    ]);
+                    
+                    if ($variant->variant_sku) {
+                        ProductVariant::where('variant_sku', $variant->variant_sku)
+                            ->whereHas('product', fn($q) => $q->where('user_id', auth()->id()))
+                            ->increment('warehouse_stock', $item->quantity);
                     }
                 }
             });
