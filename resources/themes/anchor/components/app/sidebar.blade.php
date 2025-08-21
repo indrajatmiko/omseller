@@ -61,9 +61,11 @@
                         <x-app.sidebar-link href="/datacenter-ikuti" icon="phosphor-storefront" :active="(Request::is('datacenter-ikuti'))">-</x-app.sidebar-link>
                     </x-app.sidebar-dropdown>
                     
-                    <x-app.sidebar-dropdown text="Pelanggan" icon="phosphor-arrows-clockwise" id="pelangans_dropdown" :active="(Request::is('pelangans'))" :open="(Request::is('customer/name-update') || Request::is('customer/detail') || Request::is('customer/segmentation')) ? '1' : '0'">
+                    <x-app.sidebar-dropdown text="Pelanggan" icon="phosphor-arrows-clockwise" id="pelangans_dropdown" :active="(Request::is('pelangans'))" :open="(Request::is('customer/name-update') || Request::is('customer/detail') || Request::is('customer/segmentation') || Request::is('customer/location-report') || Request::is('orders/create')) ? '1' : '0'">
+                        <x-app.sidebar-link href="/orders/create" icon="phosphor-package" :active="(Request::is('orders/create'))">Pesanan Manual</x-app.sidebar-link>
                         <x-app.sidebar-link href="/customer/name-update" icon="phosphor-package" :active="(Request::is('customer/name-update'))">Update Nama</x-app.sidebar-link>
                         <x-app.sidebar-link href="/customer/detail" icon="phosphor-trolley-suitcase" :active="(Request::is('customer/detail'))">Database</x-app.sidebar-link>
+                        <x-app.sidebar-link href="/customer/location-report" icon="phosphor-trolley-suitcase" :active="(Request::is('customer/location-report'))">Lokasi</x-app.sidebar-link>
                         <x-app.sidebar-link href="/customer/segmentation" icon="phosphor-trolley-suitcase" :active="(Request::is('customer/segmentation'))">Segmentasi</x-app.sidebar-link>
                     </x-app.sidebar-dropdown>
                     

@@ -30,4 +30,10 @@ class BuyerProfile extends Model
             // Mencocokkan address_identifier dengan hash dari address_full di tabel orders.
             ->where(DB::raw('sha1(trim(address_full))'), $this->address_identifier);
     }
+
+    public function locationData()
+    {
+        return $this->hasOne(LocationData::class);
+    }
+
 }

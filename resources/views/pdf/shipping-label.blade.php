@@ -12,7 +12,7 @@
         }
         body {
             font-family: 'Helvetica', 'Arial', sans-serif;
-            font-size: 10pt;
+            font-size: 9pt;
             line-height: 1.4;
             color: #000;
             margin: 0;
@@ -115,25 +115,24 @@
         <div class="barcode-section">
             {{-- Menyematkan gambar base64 langsung ke HTML --}}
             <img src="data:image/png;base64,{{ $barcodeImage }}" alt="Barcode">
-            <div class="tracking-number">{{ $order->tracking_number }}</div>
+            {{-- <div class="tracking-number">{{ $order->tracking_number }}</div> --}}
         </div>
         @endif
 
         <div class="section">
             <div class="section-title">Kepada:</div>
-            <div class="recipient-name">{{ $order->customer_name }}</div>
+            <div class="recipient-name">{{ $order->customer_name }} — {{ $order->reseller->phone ?? 'No. Telp tidak tersedia' }}</div>
             <div class="address">
                 {{ $order->reseller->address ?? 'Alamat tidak tersedia' }}<br>
                 Kec. {{ $order->reseller->district->name ?? '' }}, {{ $order->reseller->city->name ?? '' }}<br>
                 {{ $order->reseller->province->name ?? '' }}
             </div>
-            <div>Telp: {{ $order->reseller->phone ?? 'No. Telp tidak tersedia' }}</div>
         </div>
 
         <div class="section">
             <div class="section-title">Dari:</div>
             <div class="sender-info">
-                <strong>{{ $senderName }}</strong><br>
+                <strong>{{ $senderName }}</strong> — 
                 {{ $senderPhone }}
             </div>
         </div>

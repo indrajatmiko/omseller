@@ -27,7 +27,7 @@ return new class extends Migration
             $table->timestamp('pickup_time')->nullable();
 
             // Kolom untuk waktu scrape (kapan perubahan ini tercatat)
-            $table->timestamp('scrape_time');
+            $table->timestamp('scrape_time')->nullable();
             
             // timestamps() akan membuat created_at dan updated_at
             $table->timestamps();

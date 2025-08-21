@@ -237,12 +237,14 @@ new class extends Component {
                                         {{-- Kolom 5: Aksi --}}
                                         <div class="flex items-center justify-end" @click.stop>
                                             {{-- PERUBAHAN: Tombol Cetak di sini --}}
+                                            @if($order->order_status === 'completed')
                                             <button 
                                                 wire:click="$dispatch('open-print-modal', { orderId: {{ $order->id }}, dropship: {{ (int) $order->reseller?->is_dropship ?? 0 }} })"
                                                 type="button" 
                                                 class="rounded-lg bg-black dark:bg-white px-4 py-2 text-sm font-semibold text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors"> {{-- Ganti class jika perlu --}}
                                                 Cetak Label
                                             </button>
+                                            @endif
                                         </div>
                                     </div>
                                 </div>

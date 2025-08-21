@@ -4,6 +4,7 @@ namespace App\Console;
 
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
+use App\Console\Commands\ProcessCustomerLocations;
 
 class Kernel extends ConsoleKernel
 {
@@ -18,6 +19,7 @@ class Kernel extends ConsoleKernel
         // $schedule->command('inspire')->hourly();
         $schedule->command('subscriptions:cancel-expired')->hourly();
         $schedule->command('inventory:process-picked-up-orders')->everyFiveMinutes();
+        $schedule->command(ProcessCustomerLocations::class)->dailyAt('02:00');
     }
 
     /**
