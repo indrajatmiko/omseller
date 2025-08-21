@@ -16,9 +16,9 @@ return new class extends Migration
             $table->string('email')->nullable();
 
             // Kolom baru: kode wilayah, bukan ID
-            $table->char('province_code', 2)->nullable()->after('email');
-            $table->char('city_code', 4)->nullable()->after('province_code');
-            $table->char('district_code', 7)->nullable()->after('city_code');
+            $table->char('province_code', 2)->nullable();
+            $table->char('city_code', 4)->nullable();
+            $table->char('district_code', 7)->nullable();
 
             // Foreign key constraint
             $table->foreign('province_code')->references('code')->on('indonesia_provinces')->onUpdate('cascade')->onDelete('set null');
