@@ -15,10 +15,16 @@ return new class extends Migration
             $table->string('phone')->nullable();
             $table->string('email')->nullable();
 
-            // Kolom untuk dependent dropdown (menggunakan ID dari package laravolt)
-            $table->foreignId('province_id')->nullable()->constrained('indonesia_provinces');
-            $table->foreignId('city_id')->nullable()->constrained('indonesia_cities');
-            $table->foreignId('district_id')->nullable()->constrained('indonesia_districts');
+            // Kolom baru: kode wilayah, bukan ID
+            $table->char('province_code', 2)->nullable()->after('email');
+            $table->char('city_code', 4)->nullable()->after('province_code');
+            $table->char('district_code', 7)->nullable()->after('city_code');
+
+            // Foreign key constraint
+            $table->foreign('province_code')->references('code')->on('indonesia_provinces')->onUpdate('cascade')->onDelete('set null');
+            $table->foreign('city_code')->references('code')->on('indonesia_cities')->onUpdate('cascade')->onDelete('set null');
+            $table->foreign('district_code')->references('code')->on('indonesia_districts')->onUpdate('cascade')->onDelete('set null');
+
             // Alamat lengkap
             $table->text('address')->nullable();
             
