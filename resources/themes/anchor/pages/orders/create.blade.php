@@ -254,7 +254,7 @@ new class extends Component {
                         </a>
                     </div>
                 </div>
-            <div class="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div class="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {{-- Kolom Kiri & Tengah: Form Utama --}}
                 <div class="lg:col-span-2 space-y-6">
 
