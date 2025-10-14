@@ -45,7 +45,7 @@ new class extends Component {
 private function getProcessedCustomerData(): Collection
 {
     // Versi cache dinaikkan untuk memastikan data baru di-generate
-    $cacheKey = 'customer_segmentation_data_v8_' . auth()->id(); 
+    $cacheKey = 'customer_segmentation_data_v9_' . auth()->id(); 
     
     return Cache::remember($cacheKey, 3600, function () {
         // Query utama
@@ -96,28 +96,54 @@ private function getProcessedCustomerData(): Collection
         };
         
         // Helper quintiles (tidak berubah)
-        $getQuintiles = function (Collection $collection) {
-            $sorted = $collection->sort()->values(); $count = $sorted->count();
-            if ($count < 5) { $val = $sorted->last() ?: 1; return [$val, $val, $val, $val]; }
-            return [$sorted->get(intval($count * 0.20)), $sorted->get(intval($count * 0.40)), $sorted->get(intval($count * 0.60)), $sorted->get(intval($count * 0.80))];
+        $getQuartiles = function (Collection $collection) {
+            $sorted = $collection->sort()->values();
+            $count = $sorted->count();
+            if ($count < 4) { 
+                $val = $sorted->get(intval($count / 2)) ?: 1;
+                return [$val, $val, $val]; 
+            }
+            return [
+                $sorted->get(intval($count * 0.25)), // Q1
+                $sorted->get(intval($count * 0.50)), // Q2 (Median)
+                $sorted->get(intval($count * 0.75)), // Q3
+            ];
         };
         
-        $recencyBoundaries = $getQuintiles($profilesWithData->pluck('recency_date')->map(fn($date) => Carbon::parse($date)->timestamp));
-        $frequencyBoundaries = $getQuintiles($profilesWithData->pluck('frequency'));
-        $monetaryBoundaries = $getQuintiles($profilesWithData->pluck('monetary'));
+        // Hitung batas kuartil
+        // Untuk Recency, kita hitung selisih hari dari sekarang
+        $recencyDays = $profilesWithData->pluck('recency_date')->map(fn($date) => Carbon::parse($date)->diffInDays(now()));
+        $recencyBoundaries = $getQuartiles($recencyDays);
+        $frequencyBoundaries = $getQuartiles($profilesWithData->pluck('frequency'));
+        $monetaryBoundaries = $getQuartiles($profilesWithData->pluck('monetary'));
 
-        // Proses mapping, memastikan 'username' ada di hasil akhir
+        // Proses mapping dengan logika skor 1-4
         return $profilesWithData->map(function ($profile) use ($recencyBoundaries, $frequencyBoundaries, $monetaryBoundaries, $customerOrderDates, $getPurchaseCycle) {
-            $getRecencyScore = function ($value, $boundaries) {
-                if ($value >= $boundaries[3]) return 5; if ($value >= $boundaries[2]) return 4; if ($value >= $boundaries[1]) return 3; if ($value >= $boundaries[0]) return 2; return 1;
+
+            // --- FUNGSI SKOR BARU (1-4) ---
+            // Untuk Recency: semakin kecil nilainya (hari), semakin tinggi skornya
+            $getRecencyScore = function (int $value, array $boundaries): int {
+                if ($value <= $boundaries[0]) return 4; // Sangat baru
+                if ($value <= $boundaries[1]) return 3;
+                if ($value <= $boundaries[2]) return 2;
+                return 1; // Sudah lama
             };
-            $getScore = function ($value, $boundaries) {
-                if ($value > $boundaries[3]) return 5; if ($value > $boundaries[2]) return 4; if ($value > $boundaries[1]) return 3; if ($value > $boundaries[0]) return 2; return 1;
+            
+            // Untuk Frequency & Monetary: semakin besar nilainya, semakin tinggi skornya
+            $getScore = function (int|float $value, array $boundaries): int {
+                if ($value > $boundaries[2]) return 4; // Sangat tinggi
+                if ($value > $boundaries[1]) return 3;
+                if ($value > $boundaries[0]) return 2;
+                return 1; // Rendah
             };
-            $rScore = $getRecencyScore(Carbon::parse($profile->recency_date)->timestamp, $recencyBoundaries);
+
+            $rScore = $getRecencyScore(Carbon::parse($profile->recency_date)->diffInDays(now()), $recencyBoundaries);
             $fScore = $getScore($profile->frequency, $frequencyBoundaries);
             $mScore = $getScore($profile->monetary, $monetaryBoundaries);
+            
+            // Panggil helper segmentasi BARU
             $segmentDetails = $this->getSegmentDetails($rScore, $fScore, $mScore);
+            
             $customerKey = $profile->buyer_username . '|' . $profile->address_identifier;
             $orderDatesForCycle = $customerOrderDates->get($customerKey, collect())->pluck('created_at');
             $purchaseCycle = $getPurchaseCycle($orderDatesForCycle);
@@ -125,7 +151,7 @@ private function getProcessedCustomerData(): Collection
             return (object) [
                 'id' => $profile->id,
                 'name' => $profile->buyer_real_name,
-                'username' => $profile->buyer_username, // Ini sekarang dijamin ada dari hasil query
+                'username' => $profile->buyer_username,
                 'address' => $profile->address_full,
                 'last_order' => Carbon::parse($profile->recency_date)->diffForHumans(),
                 'last_order_raw' => $profile->recency_date,
@@ -198,20 +224,70 @@ private function getProcessedCustomerData(): Collection
         $this->reset('selectedCustomer', 'customerOrders', 'frequentItems');
     }
 
-    private function getSegmentDetails(int $r, int $f, int $m): array
-    {
-        $rf = (string)$r . (string)$f;
-        $details = ['label' => 'Tertidur', 'color' => 'gray', 'description' => 'Pelanggan yang sudah lama tidak aktif dan jarang membeli.', 'action' => 'Kirimkan penawaran "Kami Merindukanmu" dengan diskon khusus.'];
-        if ($r >= 4 && $f >= 4) { $details = ['label' => 'Juara', 'color' => 'emerald', 'description' => 'Pelanggan terbaik Anda. Beli baru-baru ini, sering, dan dalam jumlah besar.', 'action' => 'Berikan reward, akses VIP, atau jadikan duta brand.']; }
-        elseif ($f >= 4) { $details = ['label' => 'Pelanggan Setia', 'color' => 'blue', 'description' => 'Sering membeli tapi sudah agak lama tidak kembali.', 'action' => 'Hubungi personal, tawarkan produk baru yang relevan.']; }
-        elseif ($m >= 4) { $details = ['label' => 'Pembelanja Besar', 'color' => 'purple', 'description' => 'Jarang beli, tapi sekali beli nilainya sangat tinggi.', 'action' => 'Tawarkan produk premium atau paket bundling bernilai tinggi.']; }
-        elseif (preg_match('/^[3-4][3-4]$/', $rf)) { $details = ['label' => 'Pelanggan Potensial', 'color' => 'yellow', 'description' => 'Pelanggan yang cukup baru dan sudah membeli beberapa kali.', 'action' => 'Bimbing dengan tips, tawarkan langganan, atau diskon pembelian berikutnya.']; }
-        elseif (preg_match('/^[4-5]1$/', $rf)) { $details = ['label' => 'Pelanggan Baru', 'color' => 'teal', 'description' => 'Baru saja melakukan pembelian pertama.', 'action' => 'Pastikan pengalaman pertama luar biasa. Kirim panduan atau email selamat datang.']; }
-        elseif (preg_match('/^[3-4]1$/', $rf)) { $details = ['label' => 'Menjanjikan', 'color' => 'lime', 'description' => 'Baru saja membeli, namun baru sekali.', 'action' => 'Dorong pembelian kedua dengan voucher atau penawaran terbatas.']; }
-        elseif (preg_match('/^[1-2][3-5]$/', $rf)) { $details = ['label' => 'Butuh Perhatian', 'color' => 'orange', 'description' => 'Dulu sering membeli, tapi sudah lama tidak kembali.', 'action' => 'Tanyakan feedback. Tawarkan insentif kuat untuk kembali.']; }
-        elseif (preg_match('/^[1-2][1-2]$/', $rf)) { $details = ['label' => 'Hampir Tertidur', 'color' => 'red', 'description' => 'Sudah lama tidak membeli dan frekuensinya rendah.', 'action' => 'Kesempatan terakhir. Buat kampanye reaktivasi besar-besaran.']; }
-        return $details;
+private function getSegmentDetails(int $r, int $f, int $m): array
+{
+    $segment = 'Bronze'; // Default segment
+    
+    if ($r === 4 && $f === 4 && $m === 4) {
+        $segment = 'Juara';
+    } elseif ($f === 4) {
+        $segment = 'Pelanggan Setia';
+    } elseif ($r === 4 && $f >= 2) {
+        $segment = 'Potensial';
+    } elseif ($r === 4 && $f === 1) {
+        $segment = 'Pelanggan Baru';
+    } elseif ($r <= 2 && $f >= 2) { // R=1 atau R=2
+        $segment = 'Butuh Perhatian';
+    } else {
+        $segment = 'Lainnya'; // Atau bisa juga 'Bronze', 'Tertidur', dll.
     }
+    
+    // Definisikan deskripsi dan warna untuk setiap segmen
+    $details = [
+        'Juara' => [
+            'color' => 'emerald',
+            'description' => 'Pelanggan terbaik Anda di semua metrik. Baru saja membeli, sangat sering, dan belanja banyak.',
+            'action' => 'Berikan reward eksklusif, program loyalitas, dan jadikan duta brand.'
+        ],
+        'Pelanggan Setia' => [
+            'color' => 'blue',
+            'description' => 'Pelanggan yang paling sering membeli. Mereka adalah tulang punggung bisnis Anda.',
+            'action' => 'Tawarkan produk baru lebih awal (early access) dan program langganan.'
+        ],
+        'Potensial' => [
+            'color' => 'yellow',
+            'description' => 'Baru saja membeli dan sudah beberapa kali. Punya potensi besar menjadi pelanggan setia.',
+            'action' => 'Bimbing mereka dengan tips produk dan tawarkan diskon untuk pembelian berikutnya.'
+        ],
+        'Pelanggan Baru' => [
+            'color' => 'teal',
+            'description' => 'Baru saja melakukan pembelian pertama. Kesan pertama sangat penting.',
+            'action' => 'Pastikan pengalaman on-boarding mereka luar biasa. Kirim email selamat datang dan panduan produk.'
+        ],
+        'Butuh Perhatian' => [
+            'color' => 'orange',
+            'description' => 'Dulu sering membeli, tapi sudah lama tidak kembali. Berisiko hilang.',
+            'action' => 'Kirim kampanye "Kami Merindukanmu" dengan insentif yang kuat untuk menarik mereka kembali.'
+        ],
+        'Lainnya' => [
+            'color' => 'gray',
+            'description' => 'Pelanggan dengan aktivitas belanja yang rendah atau tidak menentu.',
+            'action' => 'Sertakan dalam newsletter umum, tidak perlu penanganan khusus saat ini.'
+        ],
+        'Bronze' => [ // Default fallback
+            'color' => 'gray',
+            'description' => 'Pelanggan dengan aktivitas belanja yang rendah.',
+            'action' => 'Sertakan dalam newsletter umum.'
+        ],
+    ];
+
+    return [
+        'label' => $segment,
+        'color' => $details[$segment]['color'],
+        'description' => $details[$segment]['description'],
+        'action' => $details[$segment]['action'],
+    ];
+}
 }; ?>
 
 <style>
@@ -270,12 +346,16 @@ private function getProcessedCustomerData(): Collection
                 <!-- Filter -->
                 <div class="mt-8">
                     <label for="segment-filter" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Filter berdasarkan Segmen:</label>
-                    <select id="segment-filter" wire:model.live="filterSegment" class="mt-1 block w-full md:w-1/3 rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
-                        <option value="all">Semua Segmen</option>
-                        @foreach (['Juara', 'Pelanggan Setia', 'Pembelanja Besar', 'Pelanggan Potensial', 'Pelanggan Baru', 'Menjanjikan', 'Butuh Perhatian', 'Hampir Tertidur', 'Tertidur'] as $segment)
-                            <option value="{{ $segment }}">{{ $segment }}</option>
-                        @endforeach
-                    </select>
+                        <select id="segment-filter" wire:model.live="filterSegment" class="mt-1 block w-full md:w-1/3 rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
+        <option value="all">Semua Segmen</option>
+        {{-- DAFTAR SEGMEN BARU SESUAI LOGIKA RFM YANG DISEDERHANAKAN --}}
+        <option value="Juara">Juara</option>
+        <option value="Pelanggan Setia">Pelanggan Setia</option>
+        <option value="Potensial">Potensial</option>
+        <option value="Pelanggan Baru">Pelanggan Baru</option>
+        <option value="Butuh Perhatian">Butuh Perhatian</option>
+        <option value="Lainnya">Lainnya</option>
+    </select>
                 </div>
 
                 <!-- Tabel Segmentasi -->
