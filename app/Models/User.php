@@ -7,7 +7,7 @@ use Wave\User as WaveUser;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Wave\Traits\HasProfileKeyValues;
-use App\Models\KalkulatorShopee;
+// use App\Models\KalkulatorShopee;
 
 class User extends WaveUser
 {
@@ -75,8 +75,8 @@ class User extends WaveUser
         });
     }
 
-    public function kalkulatorShopees()
-    {
-        return $this->hasMany(KalkulatorShopee::class);
-    }
+    // public function kalkulatorShopees()
+    // {
+    //     return $this->hasMany(KalkulatorShopee::class);
+    // }
 }

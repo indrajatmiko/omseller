@@ -1,6 +1,6 @@
 <?php
 use function Laravel\Folio\{middleware, name};
-use App\Models\KalkulatorShopee;
+// use App\Models\KalkulatorShopee;
 use Livewire\Volt\Component;
 
 use Filament\Forms\Components\RichEditor;
@@ -136,13 +136,13 @@ new class extends Component {
 
     public function calculateMargin()
     {
-        $this->q_kalkulator = auth()->user()->kalkulatorShopees()->get()->count('hitung');
-        if ($this->q_kalkulator < 3) {
-            auth()
-                ->user()
-                ->kalkulatorShopees()
-                ->create(['hitung' => 1]);
-        }
+        // $this->q_kalkulator = auth()->user()->kalkulatorShopees()->get()->count('hitung');
+        // if ($this->q_kalkulator < 3) {
+        //     auth()
+        //         ->user()
+        //         ->kalkulatorShopees()
+        //         ->create(['hitung' => 1]);
+        // }
 
         // Konversi format Rupiah ke angka (menghapus semua karakter non-digit)
         $harga_modal = (float) preg_replace('/\D/', '', $this->harga_modal);
