@@ -1,0 +1,235 @@
+[
+    {
+        "main_category": "A",
+        "subcategories": [
+            {
+                "name": "Kesehatan",
+                "description": "Hand Sanitizer, Perawatan Mata, Perawatan Telinga, Perawatan Mulut, Popok Dewasa, Kewanitaan, Alat Pijat & Terapi, Obat Nyamuk, Perawatan Diri lainnya."
+            },
+            {
+                "name": "Aksesoris Fashion",
+                "description": "Cincin, Anting, Syal & Selendang, Sarung Tangan, Aksesoris Rambut, Gelang Tangan & Bangle, Gelang Kaki, Topi, Kalung, Kacamata & Aksesoris, Ikat Pinggang, Dasi, Bros & Pin, Bordir, Liontin, Kancing Manset, Tato Temporer, Masker, Sapu Tangan, Aksesoris Tambahan lainnya, Set & Paket Aksesoris, Aksesoris Fashion lainnya."
+            },
+            {
+                "name": "Elektronik (Kelistrikan)",
+                "description": "Stop Kontak & Sambungan Kabel, Pengaman Stop Kontak, Penghemat Listrik, Bel, Saklar, Alarm, Anti Petir, Kelistrikan lainnya."
+            },
+            {
+                "name": "Pakaian Pria",
+                "description": "Celana Panjang Jeans, Hoodie & Sweatshirt, Sweater & Cardigan, Jaket, Mantel, & Rompi, Jas Formal, Celana Panjang, Celana Pendek, Atasan, Pakaian Dalam, Pakaian Tidur, Set Pakaian Pria, Pakaian Tradisional, Kostum, Pakaian Kerja, Kaos Kaki, Pakaian Pria lainnya."
+            },
+            {
+                "name": "Sepatu Pria",
+                "description": "Boot, Sneakers, Slip-On & Mules, Loafer, Oxford, Sandal, Alat Perawatan & Pembersih Sepatu, Parfum Sepatu, Tali Sepatu, Shoe Tree & Horns, Insole Sepatu, Aksesoris & Perawatan Sepatu lainnya, Sepatu Pria lainnya."
+            },
+            {
+                "name": "Handphone & Aksesoris",
+                "description": "Kartu Perdana, Handphone & Aksesoris lainnya, Smartwatch & Fitness Tracker, Perangkat VR, Pelacak GPS, Perangkat Wearable lainnya, Tongsis, Lazypod, Tomsis, Aksesoris Selfie lainnya, Lensa Tambahan Handphone, Flash & Lampu Selfie Handphone, Kipas USB, Stylus, Phone Holder, Tali & Gantungan Handphone, Pouch Handphone, Casing, Penggulung, & Pengikat Kabel, Travel Adaptor, Kabel & Adaptor Handphone, Charger, Charger Docking, Kabel, Charger & Adaptor lainnya, Baterai, Powerbank, Powercase, Powerbank & Baterai lainnya, Aksesoris Perangkat Wearable, Pelindung Layar Handphone, Casing & Skin, Aksesoris lainnya."
+            },
+            {
+                "name": "Fashion Muslim",
+                "description": "Hijab, Aksesoris Hijab, Kaos Kaki, Handsock, Aksesoris lainnya, Baju Olahraga Muslim, Baju Renang Muslim, Tunik, Kemeja, Blouse & Dalaman Blouse, Atasan Menyusui, Atasan Muslim lainnya, Gamis, Abaya, Dress Menyusui, Kaftan, Baju Kelelawar, Baju Kurung, Set Baju Muslim, Jumpsuit, Dress Muslim lainnya, Rok, Celana Panjang, Legging, Celana Palazzo, Bawahan Muslim lainnya, Pakaian Muslim Wanita lainnya, Set Perlengkapan Sholat, Sajadah, Peci, Mukena Dewasa, Mukena Travel, Mukena & Perlengkapan Sholat lainnya, Atasan, Gamis Pria, Celana, Sarung, Baju Melayu, Pakaian Muslim Pria lainnya, Hijab Anak, Mukena Anak, Pakaian & Set Muslim Anak, Pakaian Muslim Anak Perempuan lainnya, Pakaian Muslim Anak Laki-Laki, Pakaian Muslim Anak lainnya, Rompi, Jaket, Mantel, Cardigan, Outerwear lainnya, Set, Fashion Muslim lainnya."
+            },
+            {
+                "name": "Koper & Tas Travel",
+                "description": "Koper, Tas Duffel, Tas Lipat, Tas Serut, Tas Travel lainnya, Passport Cover, Organizer Travel, Pelindung & Sarung Koper, Tag Koper, Strap Koper, Gembok Koper, Timbangan Koper, Bantal Leher & Penutup Mata, Botol & Wadah Isi Ulang, Aksesoris Travel lainnya, Koper & Tas Travel lainnya."
+            },
+            {
+                "name": "Tas Wanita",
+                "description": "Ransel Wanita, Tas Laptop, Clutch, Tas Pinggang Wanita, Tote Bag, Top Handle Bag, Tas Selempang & Bahu Wanita, Dompet Wanita, Aksesoris Tas, Tas Wanita lainnya."
+            },
+            {
+                "name": "Pakaian Wanita",
+                "description": "Atasan, Celana Panjang & Legging, Celana Pendek, Rok, Celana Panjang Jeans, Dress, Wedding Dress, Jumpsuit, Playsuit, & Overall, Jaket, Mantel, & Rompi, Sweater & Cardigan, Hoodie & Sweatshirt, Set, Pakaian Dalam, Pakaian Tidur & Piyama, Baju Hamil, Pakaian Tradisional, Kostum, Kain, Kaos Kaki & Stocking, Pakaian Wanita lainnya."
+            },
+            {
+                "name": "Sepatu Wanita",
+                "description": "Boots, Sneakers, Sepatu Flat, Heels, Wedges, Sandal Jepit & Sandal lainnya, Aksesoris & Perawatan Sepatu, Sepatu Wanita lainnya."
+            },
+            {
+                "name": "Tas Pria",
+                "description": "Ransel Pria, Tas Laptop, Tote Bag, Tas Kerja, Clutch, Tas Pinggang Pria, Tas Selempang & Bahu Pria, Dompet, Tas Pria lainnya."
+            },
+            {
+                "name": "Jam Tangan",
+                "description": "Jam Tangan Wanita, Jam Tangan Pria, Jam Tangan Couple, Aksesoris Jam Tangan, Jam Tangan lainnya."
+            },
+            {
+                "name": "Audio",
+                "description": "Kabel & Konverter Audio & Video."
+            },
+            {
+                "name": "Makanan & Minuman",
+                "description": "Biskuit, Kue & Wafer, Keripik & Kerupuk, Biji-bijian, Popcorn, Rumput Laut, Kacang, Makanan Ringan lainnya, Puding, Jeli, & Marshmallow, Dendeng, Buah Kering, Abon, Snack Seafood, Makanan Ringan Kering lainnya."
+            },
+            {
+                "name": "Perawatan & Kecantikan",
+                "description": "Sabun Mandi, Scrub & Peel Tubuh, Masker Tubuh, Minyak Tubuh, Body Cream, Body Lotion & Body Butter, Deodoran, Minyak Pijat, Cream & Wax Penghilang Bulu Rambut, Sun Care, Perawatan Payudara, Perawatan Tubuh lainnya, Perawatan Tangan, Perawatan Kaki, Perawatan Kuku, Perawatan Tangan, Kaki & Kuku lainnya, Shampo, Pewarna Rambut, Treatment Rambut, Kondisioner Rambut dan Kulit Kepala, Hair Styling, Perawatan Rambut lainnya, Perawatan Tubuh Pria, Perawatan Wajah Pria, Shaving & Grooming, Perawatan Rambut Pria, Perawatan Pria lainnya, Parfum & Wewangian, Kosmetik lainnya, Kosmetik Wajah, Kosmetik Mata, Kosmetik Bibir, Pembersih Make Up, Aksesoris Make Up, Alat Perawatan Wajah, Alat Pelangsing Tubuh, Alat Penghilang Bulu Rambut, Alat Rambut, Alat Kecantikan lainnya, Pembersih Wajah, Toner, Pelembab Wajah, Minyak Wajah, Facial Mist, Serum & Essence Wajah, Scrub & Peel Wajah, Masker Wajah, Treatment Mata, Treatment Bibir, Sunscreen Wajah, Perawatan Wajah After Sun, Kertas Minyak, Treatment Jerawat, Perawatan Wajah lainnya, Paket & Set Kecantikan, Perawatan & Kecantikan lainnya."
+            },
+            {
+                "name": "Ibu & Bayi",
+                "description": "Perlengkapan Travelling Bayi, Perlengkapan Makan Bayi, Perlengkapan Mandi, Boks & Matras Tidur Bayi, Ayunan Bayi, Baby Walker, Matras & Sprei, Tempat Penyimpanan, Kamar Bayi lainnya, Baby Monitor, Kelambu, Bumper, Rail, & Guard, Pelindung Sudut, Pintu & Pagar Bayi, Pengaman Laci & Lemari, Alat Keamanan Bayi lainnya, Perlengkapan Botol Susu, Kursi Makan Bayi, Peralatan Makan, Celemek Bayi, Dot Bayi, Food Processor, Perlengkapan Makan Bayi Lainnya, Perawatan Hidung & Pernafasan, Perawatan Kulit Bayi, Perawatan Mulut Bayi, Sun Care Bayi, Kesehatan Bayi lainnya, Perlak, Pispot, Popok & Pispot lainnya, Mainan Bayi & Anak, Boneka & Mainan Boneka, Mainan Peran, Kendaraan Mainan, Mainan Olahraga & Outdoor, Mainan Robot, Mainan lainnya, Set & Paket Hadiah, Ibu & Bayi lainnya, Breast Pad, Shell & Shield, Apron Menyusui, Kantong ASI, Perlengkapan Menyusui Lainnya, Seni & Kerajinan, Mainan Matematika, Mainan Ilmu Pengetahuan Alam & Teknologi, Shape Sorter, Mainan Musik, Mainan Tablet & Komputer, Mainan Edukatif Lainnya, Kartu Edukasi Anak, Poster Edukatif."
+            },
+            {
+                "name": "Fashion Bayi & Anak",
+                "description": "Pakaian Bayi, Sepatu Bayi, Pakaian Anak Laki-Laki, Pakaian Anak Perempuan, Sepatu Anak Laki-Laki, Sepatu Anak Perempuan, Fashion Bayi & Anak lainnya, Tas & Koper, Topi, Kacamata, Aksesoris Rambut, Sarung Tangan, Ikat Pinggang, Kaos Kaki, Syal, Jam Tangan, Perlengkapan Hujan, Alat Penutup Telinga, Aksesoris Bayi & Anak Lainnya."
+            },
+            {
+                "name": "Perlengkapan Rumah",
+                "description": "Minyak Esensial, Diffuser & Oil Burner, Pengharum Ruangan & Aromaterapi Lainnya, Kloset & Alas Dudukan Kloset, Tempat Sikat Gigi & Dispenser Odol, Dispenser, Tempat, & Kotak Sabun, Rak & Kabinet Kamar Mandi, Bak Mandi & Bathtub, Handuk Mandi & Kimono, Kepala Shower & Spray Bidet, Sikat & Spons Badan, Tirai Shower, Tempat Duduk Mandi & Pispot, Pegangan Kamar Mandi, Shower Cap, Kamar Mandi lainnya, Matras Pendingin, Pelindung Matras, Selimut, Bantal, Sprei, Sarung Bantal & Sarung Guling, Matras, Kelambu, Guling, Kamar Tidur lainnya, Bunga, Furniture & Pelindung Furniture, Tirai & Tirai Gulung, Bingkai Foto & Pajangan Dinding, Wallpaper & Stiker Dinding, Jam Dinding, Keset, Karpet & Tikar, Vas & Bejana, Lilin & Tempat Lilin, Cermin, Taplak Meja, Dekorasi lainnya, Penghangat Tangan & Kantong Kompres, Bantal Sofa, Penahan Pintu, Rangka & Sandaran Tempat Tidur, Meja & Meja Tulis, Lemari Pakaian, Sofa, Lemari & Kabinet, Rak & Rak Gantung, Furniture lainnya, Tanaman, Dekorasi Taman, Tanah & Media Tanam, Pupuk, Bibit & Umbi, Pot & Planter, Sistem Pengairan, Peralatan Berkebun, Taman lainnya, Mesin Pemotong Rumput, Perekat & Tape, Sarung Tangan, Kacamata, & Masker Pelindung, Bak Cuci Piring & Kran Air, Atap & Lantai, Cat & Pelapis Dinding, Perkakas, Pompa Air & Aksesoris, Pompa Udara & Aksesoris, Tangga, Troli, Tenda & Terpal, Material Konstruksi, Pintu & Jendela, Alat Pemeliharaan Rumah lainnya, Tali Jemuran & Rak Pengering, Sikat Pembersih, Sapu, Kemoceng, Kain Pel, Basin, Ember, & Gayung Air, Spons & Scouring Pad, Tempat Sampah, Kantong Plastik & Kantong Sampah, Lap, Alat & Aksesoris Pemanggang, Alat & Dekorasi Baking, Penggorengan, Panci, Tempat Penyimpanan Makanan, Cling Wrap, Aluminium Foil, Peralatan Teh, Kopi & Bartending, Rak Dapur, Celemek & Pelindung Tangan, Spatula & Capitan, Talenan, Pisau & Gunting Dapur, Pengocok Telur, Pembuka Tutup Kaleng & Botol, Gelas & Sendok Takar, Saringan, Parutan & Peeler, Timbangan Dapur, Korek Api & Pemantik, Perlengkapan Dapur lainnya, Peralatan Makan, Lampu, Brankas, Pemadam Api, Perangkat Pintu & Gembok, Alat Pengaman lainnya, Organizer Rumah, Perlengkapan Pesta, Perlengkapan Keagamaan, Perlengkapan Rumah lainnya."
+            },
+            {
+                "name": "Olahraga & Outdoor",
+                "description": "Alat Pancing, Camping & Hiking, Panjat Tebing, Skateboard & Sepatu Roda, Skuter & Sepeda Roda Satu, Segway & Hoverboard, Helm & Alat Pelindung, Boardsport lainnya, Panahan, Sepak Bola, Futsal & Sepak Takraw, Basket, Voli, Bulu Tangkis, Tenis, Tenis Meja, Tinju & Bela Diri, Golf, Baseball & Softball, Squash, Rugbi, Billiard, Selancar & Wakeboard, Ice Skating & Olahraga Musim Dingin, Diving & Renang, Boating, Yoga & Pilates, Fitness, Dart, Alat Rekreasi Olahraga & Aktivitas Outdoor lainnya, Sepatu Olahraga, Pakaian Olahraga & Aktivitas Outdoor, Aksesoris Olahraga & Aktivitas Outdoor, Olahraga & Outdoor lainnya, Sepeda, Komponen & Aksesoris Sepeda, Helm Sepeda, Bersepeda Lainnya."
+            },
+            {
+                "name": "Buku & Alat Tulis",
+                "description": "Pembungkus Kado & Kemasan, Alat Tulis, Perlengkapan Sekolah & Kantor, Perlengkapan Menggambar, Buku Tulis & Kertas, Surat-Menyurat, Buku & Alat Tulis lainnya."
+            },
+            {
+                "name": "Hobi & Koleksi",
+                "description": "Kipas Tangan, Gantungan Kunci, Celengan, Magnet Kulkas, Souvenir & Hadiah lainnya."
+            },
+            {
+                "name": "Mobil",
+                "description": "Aksesoris Interior Mobil, Aksesoris Eksterior Mobil, Perkakas & Perlengkapan Kendaraan, Perawatan Kendaraan, Gantungan & Sarung Kunci Kendaraan, Mobil lainnya."
+            },
+            {
+                "name": "Sepeda Motor",
+                "description": "Aksesoris Sepeda Motor, Suku Cadang Motor, Helm & Aksesoris Pengendara Motor, Sepeda Motor lainnya."
+            },
+            {
+                "name": "Tiket, Voucher, & Layanan",
+                "description": "Tiket Event, Makanan & Minuman, Belanja, Listrik, Gas, & Air, Layanan, Telco, Travel & Tour, E-Money, Gaming, Streaming, Shopee Official, Saldo Iklan Shopee, Shopee lainnya."
+            },
+            {
+                "name": "Buku & Majalah",
+                "description": "Majalah & Koran, Buku Bacaan, E-Book, Buku & Majalah lainnya."
+            }
+        ]
+    },
+    {
+        "main_category": "B",
+        "subcategories": [
+            {
+                "name": "Elektronik",
+                "description": "Baterai, Vaporizer, Remot Kontrol, Elektronik Lainnya, Foot Bath & Spa, Flosser Elektrik, Telepon, Perlengkapan Listrik Kecil Lainnya, Water Heater, Penghangat Ruangan, Pengering Sepatu, Peralatan Listrik Besar Lainnya."
+            },
+            {
+                "name": "Handphone & Aksesoris",
+                "description": "Alat Casting, Walkie Talkie, Kartu Memori."
+            },
+            {
+                "name": "Audio",
+                "description": "MP3 & MP4 Player, CD, DVD, & Blu-ray Player, Radio & Pemutar Kaset, Amplifier & Mixer, Home Theater & Karaoke, Voice Recorder, Media Player lainnya, Mikrofon & Aksesoris, Speaker, AV Receiver, Perangkat Audio & Speaker lainnya, Audio lainnya."
+            },
+            {
+                "name": "Gaming & Konsol",
+                "description": "Playstation, Xbox, Wii, Nintendo 3DS & DS, Gameboy, Switch, PS Vita, PSP, Konsol Game lainnya, Aksesoris Konsol, Video Game, Gaming & Konsol lainnya."
+            },
+            {
+                "name": "Kamera & Drone",
+                "description": "Kamera Keamanan, Perawatan Kamera, Kamera & Drone Lainnya, Gimbal & Stabilizer, Lighting & Perlengkapan Studio Foto, Roll Film & Kertas Foto, Printer Foto, Charger Baterai, Baterai & Battery Grip, Tripod, Monopod & Aksesoris, Aksesoris Kamera lainnya."
+            },
+            {
+                "name": "Mobil",
+                "description": "Mobil, Suku Cadang Mobil, Oli & Pelumas Kendaraan."
+            },
+            {
+                "name": "Kesehatan",
+                "description": "Diet & Detoks, Suplemen Kecantikan, Kebugaran, Kesejahteraan, Suplemen Makanan lainnya, Kesehatan lainnya, Obat Bebas, Obat Tradisional, Alat Tes & Monitor, Timbangan & Alat Ukur Kadar Lemak, Perawatan Hidung & Pernafasan, P3K, Stetoskop, Obat Pereda Nyeri, Alat Laboratorium, Sarung Tangan & Masker Medis, Alat Bantu Cedera & Disabilitas, Alat Medis lainnya, Kondom, Pelumas, Penunjang Performa, Kesehatan Seksual lainnya."
+            },
+            {
+                "name": "Makanan & Minuman",
+                "description": "Makanan Instant, Permen, Cokelat, Makanan Kaleng, Kopi, Teh, Minuman Coklat, Susu, Minuman Energi & Isotonik, Air Mineral, Jus & Sirup, Cordial & Sirup, Minuman Bersoda, Minuman Bubuk Instan, Minuman Pencuci Mulut, Minuman Tradisional & Herbal, Topping Minuman, Susu Non-Dairy, Minuman lainnya, Yoghurt, Krimer, Mentega & Margarin, Keju, Tahu, Susu & Olahan lainnya, Roti & Kue, Minuman Alkohol, Set Hadiah & Hampers, Makanan & Minuman lainnya."
+            },
+            {
+                "name": "Hewan Peliharaan",
+                "description": "Makanan Hewan, Aksesoris Hewan Peliharaan, Litter & Toilet, Grooming Hewan, Pakaian & Aksesoris Hewan, Perawatan Kesehatan Hewan, Hewan Peliharaan lainnya."
+            },
+            {
+                "name": "Ibu & Bayi",
+                "description": "Pompa ASI & Aksesoris, Penyangga Perut, Bantal Ibu Hamil, Perlengkapan Ibu Hamil lainnya, Susu Ibu Hamil, Vitamin & Suplemen Ibu Hamil, Pelembab & Cream, Kesehatan Kehamilan lainnya, Popok Sekali Pakai, Popok Kain & Aksesoris, Mainan Balok, Puzzle, Mainan Slime & Squishy."
+            },
+            {
+                "name": "Perlengkapan Rumah",
+                "description": "Pengharum Ruangan, Kursi Taman, Kursi & Bangku, Pembasmi Hama & Gulma, Tisu & Tisu Kertas, Tisu Toilet, Pembersih, Perawatan Pakaian, Perawatan Rumah Lainnya."
+            },
+            {
+                "name": "Hobi & Koleksi",
+                "description": "Action Figure, Patung, Mecha Model & Diecast, Vehicle Model & Diecast, Batu Akik & Alam, Koleksi Penggemar, Koleksi Olahraga, Koleksi Anime & Manga, Koin & Uang Kertas, Koleksi lainnya, Mainan & Games, CD, DVD & Bluray, Alat & Aksesoris Musik, Piringan Hitam, Album Foto, Perlengkapan Menjahit, Hobi & Koleksi lainnya."
+            }
+        ]
+    },
+    {
+        "main_category": "C",
+        "subcategories": [
+            {
+                "name": "Elektronik",
+                "description": "TV & Aksesoris, Mesin Jahit & Aksesoris, Setrika & Mesin Uap, Purifier, Humidifier, Penyedot Debu & Peralatan Perawatan Lantai, Mesin Cuci & Pengering, Pendingin Ruangan, Dispenser & Filter Air, Pemanas Air, Kulkas Wine, Juicer, Blender & Mesin Kacang Kedelai, Mesin Kopi & Aksesoris, Mixer, Dishwashers, Kompor & Regulator Gas, Air Fryer, Deep Fryer, Microwave, Oven, Pemanggang Roti, Food Processor & Penggiling Daging, Alat Masak Serbaguna, Panci Presto, Slow Cooker & Mesin Sous Vide, Penanak Nasi, Pembuat Waffle & Crepe, Perebus Telur, Pembuat Roti, Pembuat Takoyaki, Pembuat Dessert, Pembuat Soda, Kulkas, Freezer, Penghisap Asap Dapur, Perangkat Dapur & Peralatan Masak Khusus lainnya."
+            },
+            {
+                "name": "Handphone & Aksesoris",
+                "description": "USB & Lampu Handphone, Modem."
+            },
+            {
+                "name": "Audio",
+                "description": "Earphone, Headphone & Headset."
+            },
+            {
+                "name": "Kamera & Drone",
+                "description": "Kamera, Lensa, Aksesoris Lensa, Drone, Aksesoris Drone, Flash, Aksesoris Flash, Tas & Casing Kamera."
+            },
+            {
+                "name": "Komputer & Aksesoris",
+                "description": "Komponen Network, Software, Aksesoris Desktop & Laptop, Keyboard & Mouse, Komputer & Aksesoris Lainnya, Sound Card."
+            },
+            {
+                "name": "Makanan & Minuman",
+                "description": "Makanan Kering, Mie, Beras, Pasta, Bahan Pokok lainnya, Acar Sayuran, Minyak, Bumbu Masak, Gula, Pemanis, Kaldu, Saus & Sup Instan, Bumbu Masak Instant, Penambah Rasa, Tepung Bumbu, Kebutuhan Memasak lainnya, Penyedap Kue, Baking Powder & Soda Kue, Tepung Premix Instan, Tepung, Pewarna Makanan, Bahan Dekorasi Kue, Bahan Baking lainnya, Madu & Olesan, Selai & Olesan, Sereal, Granola, & Oat, Bar Sereal, Menu Sarapan lainnya, Es Krim, Telur, Daging, Seafood, Daging Vegetarian, Makanan Segar & Beku lainnya, Sayuran, Buah-buahan, Jamur, Makanan Beku Olahan, Daging & Seafood Beku."
+            },
+            {
+                "name": "Ibu & Bayi",
+                "description": "Susu Formula, Bubur & Sereal Bayi, Camilan Bayi, Susu Formula & Makanan Bayi lainnya, Vitamin & Suplemen Bayi."
+            },
+            {
+                "name": "Perlengkapan Rumah",
+                "description": "Sealer."
+            }
+        ]
+    },
+    {
+        "main_category": "D",
+        "subcategories": [
+            {
+                "name": "Komputer & Aksesoris",
+                "description": "Desktop, Monitor, Penyimpanan Data, Peralatan Kantor, Printer & Scanner, Laptop, Fan & Heatsink, Processor, Motherboard, VGA Card, Thermal Paste, Power Supply, Memory RAM, UPS & Stabilizer, Casing Komputer, Optical Drive, Komponen Desktop & Laptop Lainnya."
+            },
+            {
+                "name": "Elektronik",
+                "description": "Pointer, Proyektor & Layar Proyektor, Proyektor & Aksesoris Lainnya."
+            },
+            {
+                "name": "Handphone & Aksesoris",
+                "description": "Handphone, Tablet."
+            },
+            {
+                "name": "Fashion Bayi & Anak",
+                "description": "Perhiasan."
+            },
+            {
+                "name": "Aksesoris Fashion",
+                "description": "Logam Mulia, Perhiasan Berharga."
+            }
+        ]
+    },
+    {
+        "main_category": "E",
+        "subcategories": [
+            {
+                "name": "Sepeda Motor",
+                "description": "Sepeda Motor"
+            }
+        ]
+    }
+]
