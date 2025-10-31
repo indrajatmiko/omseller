@@ -11,27 +11,27 @@ class ServiceFeeSeeder extends Seeder
 {
     public function run(): void
     {
-        // // Kosongkan tabel terlebih dahulu untuk menghindari duplikasi
-        // DB::statement('SET FOREIGN_KEY_CHECKS=0;');
-        // DB::table('service_fees')->truncate();
-        // DB::table('service_fee_details')->truncate();
-        // DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        // Kosongkan tabel terlebih dahulu untuk menghindari duplikasi
+        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+        DB::table('service_fees')->truncate();
+        DB::table('service_fee_details')->truncate();
+        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
 
-        // // 1. Tambahkan Biaya Program Layanan (tidak punya detail)
-        // ServiceFee::create([
-        // 'platform' => 'shopee', 'seller_type' => 'all', 'fee_type' => 'program_fee', 'name' => 'Gratis Ongkir Xtra',
-        // 'description' => 'Program Gratis Ongkir Xtra', 'value' => 4.00, 'value_type' => 'percentage', 'max_cap' => 10000, 'is_active' => true
-        // ]);
-        // ServiceFee::create([
-        // 'platform' => 'shopee', 'seller_type' => 'all', 'fee_type' => 'program_fee', 'name' => 'Promo Xtra',
-        // 'description' => 'Program Cashback & Promo Xtra', 'value' => 1.40, 'value_type' => 'percentage', 'max_cap' => 10000, 'is_active' => true
-        // ]);
+        // 1. Tambahkan Biaya Program Layanan (tidak punya detail)
+        ServiceFee::create([
+        'platform' => 'shopee', 'seller_type' => 'all', 'fee_type' => 'program_fee', 'name' => 'Gratis Ongkir Xtra',
+        'description' => 'Program Gratis Ongkir Xtra', 'value' => 4.00, 'value_type' => 'percentage', 'max_cap' => 10000, 'is_active' => true
+        ]);
+        ServiceFee::create([
+        'platform' => 'shopee', 'seller_type' => 'all', 'fee_type' => 'program_fee', 'name' => 'Promo Xtra',
+        'description' => 'Program Cashback & Promo Xtra', 'value' => 1.40, 'value_type' => 'percentage', 'max_cap' => 10000, 'is_active' => true
+        ]);
 
-        // // 2. Proses file JSON untuk Penjual Non-Star & Star
-        // $this->processJsonFile('kategori_produk.json', 'non_star');
+        // 2. Proses file JSON untuk Penjual Non-Star & Star
+        $this->processJsonFile('kategori_produk.json', 'non_star');
 
-        // // 3. Proses file JSON untuk Penjual Mall
-        // $this->processJsonFile('kategori_produk_mall.json', 'mall');
+        // 3. Proses file JSON untuk Penjual Mall
+        $this->processJsonFile('kategori_produk_mall.json', 'mall');
 
         // --- DATA TIKTOK (BARU) ---
         $this->seedTiktokProgramFees();
