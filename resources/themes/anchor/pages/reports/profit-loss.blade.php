@@ -62,9 +62,7 @@ new class extends Component {
             ->get()->keyBy(fn($item) => Carbon::parse($item->date)->format('Y-m-d'));
 
         $report = [];
-        // Hanya bangun data sampai hari yang akan ditampilkan di tabel (lastDayForTable)
-        $loopDays = $lastDayForTable;
-        for ($i = 1; $i <= $loopDays; $i++) {
+        for ($i = 1; $i <= $startDate->daysInMonth; $i++) {
             $currentDate = Carbon::create($this->selectedYear, $this->selectedMonth, $i)->format('Y-m-d');
             $omset = $itemBasedData[$currentDate]->omset ?? 0;
             $cogs = $itemBasedData[$currentDate]->total_cogs ?? 0;
@@ -368,14 +366,7 @@ new class extends Component {
                     <table class="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
                         <tbody class="divide-y divide-gray-200 dark:divide-gray-800 bg-white dark:bg-gray-900">
                             @for ($i = 1; $i <= $daysInMonth; $i++)
-                                @php
-                                    $data = $reportData[$i] ?? [
-                                        'day' => str_pad($i, 2, '0', STR_PAD_LEFT),
-                                        'omset' => 0, 'laba_kotor' => 0, 'biaya_admin' => 0, 'biaya_service' => 0,
-                                        'komisi_ams' => 0, 'voucher_toko' => 0, 'biaya_iklan' => 0, 'pajak_iklan' => 0,
-                                        'pengeluaran' => 0, 'profit' => 0
-                                    ];
-                                @endphp
+                                @php $data = $reportData[$i]; @endphp
                                 @if($data['omset'] > 0 || $data['pengeluaran'] > 0)
                                 <tr class="{{ $data['profit'] > 0 ? '' : ($data['profit'] < 0 ? 'bg-red-50 dark:bg-red-900/20' : '') }}">
                                     <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm sm:pl-6">
@@ -415,14 +406,7 @@ new class extends Component {
 
         <div class="mt-6 space-y-4 md:hidden">
             @for ($i = 1; $i <= $daysInMonth; $i++)
-                @php
-                    $data = $reportData[$i] ?? [
-                        'day' => str_pad($i, 2, '0', STR_PAD_LEFT),
-                        'omset' => 0, 'laba_kotor' => 0, 'biaya_admin' => 0, 'biaya_service' => 0,
-                        'komisi_ams' => 0, 'voucher_toko' => 0, 'biaya_iklan' => 0, 'pajak_iklan' => 0,
-                        'pengeluaran' => 0, 'profit' => 0
-                    ];
-                @endphp
+                @php $data = $reportData[$i]; @endphp
                  @if($data['omset'] > 0 || $data['pengeluaran'] > 0)
                 <div class="bg-white dark:bg-gray-800/50 shadow-sm rounded-lg overflow-hidden">
                     <div class="px-4 py-3 flex justify-between items-center {{ $data['profit'] > 0 ? '' : ($data['profit'] < 0 ? 'bg-red-50 dark:bg-red-900/20' : 'bg-gray-50 dark:bg-gray-800') }}">
