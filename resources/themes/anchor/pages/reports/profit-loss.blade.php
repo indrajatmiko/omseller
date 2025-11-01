@@ -187,7 +187,7 @@ new class extends Component {
 <x-layouts.app>
     @volt('reports-profit-loss')
     <x-app.container>
-        <x-app.heading title="Laporan Laba Rugi" description="Analisis performa harian toko Anda dalam periode yang dipilih." />
+        <x-app.heading title="Laporan Laba Rugi" description="Analisis performa harian toko Anda dalam periode yang dipilih. <strong>Penting! Data dihitung untuk pesanan yang sudah terkirim.</strong>" />
 
         {{-- Filter --}}
         <div class="mt-6 flex items-center justify-between">
