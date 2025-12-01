@@ -9,9 +9,11 @@ use Illuminate\Notifications\Notifiable;
 use Wave\Traits\HasProfileKeyValues;
 // use App\Models\KalkulatorShopee;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+
 class User extends WaveUser
 {
-    use Notifiable, HasProfileKeyValues;
+    use Notifiable, HasFactory, HasProfileKeyValues;
 
     public $guard_name = 'web';
 
