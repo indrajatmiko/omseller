@@ -34,7 +34,29 @@ new class extends Component {
     
     private function getUniqueOrderHistoryQuery($userId)
     {
-        return DB::table('order_status_histories')->select('order_id', DB::raw('MIN(pickup_time) as first_pickup_time'))->where('status', 'Sudah Kirim')->whereNotNull('pickup_time')->groupBy('order_id');
+        // Kita mulai dari tabel 'orders' agar bisa melakukan Left Join ke dua tabel history
+        return DB::table('orders')
+            ->where('user_id', $userId)
+            // 1. Join ke SUMBER UTAMA (Status: Sudah Kirim)
+            ->leftJoin('order_status_histories as osh', function ($join) {
+                $join->on('orders.id', '=', 'osh.order_id')
+                     ->where('osh.status', 'Sudah Kirim')
+                     ->whereNotNull('osh.pickup_time');
+            })
+            // 2. Join ke SUMBER CADANGAN (Status: Pesanan Baru)
+            ->leftJoin('order_histories as oh', function ($join) {
+                $join->on('orders.id', '=', 'oh.order_id')
+                     ->where('oh.status', 'Pesanan Baru');
+            })
+            // 3. Ambil Tanggal dengan Prioritas
+            ->select(
+                'orders.id as order_id', 
+                // COALESCE akan mengambil osh.pickup_time dulu. Jika NULL (kosong), baru ambil oh.created_at
+                DB::raw('COALESCE(MIN(osh.pickup_time), MIN(oh.created_at)) as first_pickup_time')
+            )
+            ->groupBy('orders.id')
+            // 4. Pastikan hasil akhirnya tidak NULL (artinya minimal ada di salah satu tabel)
+            ->havingRaw('first_pickup_time IS NOT NULL');
     }
 
     private function generateReportData()

@@ -22,7 +22,21 @@ new class extends Component {
     public $file;
     public $marketplace = 'shopee';
     public $importSummary = [];
-    public $isProcessing = false;
+    public $isFileValid = false;
+
+    public function updatedFile()
+    {
+        $this->resetErrorBag();
+        $this->isFileValid = false;
+
+        try {
+            $filename = $this->file->getClientOriginalName();
+            $this->validateFilename($filename);
+            $this->isFileValid = true;
+        } catch (\Exception $e) {
+            $this->addError('file', $e->getMessage());
+        }
+    }
 
     public function import()
     {
@@ -31,19 +45,20 @@ new class extends Component {
             'marketplace' => 'required|in:shopee,tiktok',
         ]);
 
-        $this->isProcessing = true;
         $this->importSummary = ['success' => 0, 'skipped' => 0, 'errors' => 0];
 
         try {
-            // 1. Validasi Nama & Ekstensi
             $filename = $this->file->getClientOriginalName();
             $this->validateFilename($filename);
 
             $path = $this->file->getRealPath();
             
-            // 2. Baca Excel
+            // Baca Excel
             $spreadsheet = IOFactory::load($path);
             $worksheet = $spreadsheet->getActiveSheet();
+            
+            // toArray(null, true, true, true) -> Parameter terakhir 'true' artinya
+            // kita mengambil data yang SUDAH DIFORMAT (String "138.000"), bukan raw number.
             $rawRows = $worksheet->toArray(null, true, true, true); 
             
             $rows = [];
@@ -55,13 +70,13 @@ new class extends Component {
                 throw new \Exception("File Excel kosong atau tidak memiliki data.");
             }
 
-            // 3. Mapping Header
+            // Mapping Header
             $headerRaw = $rows[0];
             $headers = array_map(function($h) {
                 return Str::slug($h, '_'); 
             }, $headerRaw);
 
-            // 4. Ubah ke Associative Array
+            // Ubah ke Associative Array
             $sheetData = [];
             for ($i = 1; $i < count($rows); $i++) {
                 $currentRow = $rows[$i];
@@ -77,7 +92,7 @@ new class extends Component {
                 $sheetData[] = array_combine($headers, $currentRow);
             }
 
-            // 5. Proses Import
+            // Proses Import
             if ($this->marketplace === 'shopee') {
                 $this->processShopeeImport($sheetData);
             } elseif ($this->marketplace === 'tiktok') {
@@ -97,8 +112,7 @@ new class extends Component {
             $this->addError('file', 'Error: ' . $msg);
             $this->importSummary['errors']++;
         } finally {
-            $this->isProcessing = false;
-            $this->reset('file');
+            $this->reset(['file', 'isFileValid']);
         }
     }
 
@@ -141,22 +155,18 @@ new class extends Component {
                 $firstRow = $rows->first();
                 $val = fn($key) => $firstRow[$key] ?? null;
 
-                // Parsing Tanggal
                 $orderCreatedAt = $this->parseDate($val('waktu_pesanan_dibuat'));
                 $shippingArrangedAt = $this->parseDate($val('waktu_pengiriman_diatur'));
                 
-                // 1. Insert Header Order
                 $order = Order::create([
                     'user_id' => $userId,
                     'channel' => 'shopee',
                     'shopee_order_id' => $orderSn,
                     'order_sn' => $orderSn,
                     'order_date' => $orderCreatedAt,
-                    
                     'created_at' => $orderCreatedAt,
                     'updated_at' => $shippingArrangedAt,
                     'scraped_at' => $shippingArrangedAt,
-                    
                     'buyer_username' => $val('username_pembeli'),
                     'buyer_name' => $val('nama_penerima'),
                     'order_status' => $val('status_pesanan'),
@@ -169,19 +179,16 @@ new class extends Component {
                     'shipping_cost' => $this->parseCurrency($val('perkiraan_ongkos_kirim')),
                 ]);
 
-                // 2. Insert Order Status Histories (BARU)
-                // Kita insert status 'Sudah Kirim' agar terbaca di laporan Profit Loss
                 DB::table('order_status_histories')->insert([
                     'order_id' => $order->id,
-                    'status' => 'Sudah Kirim', // Hardcode agar match dengan query laporan
+                    'status' => 'Sudah Kirim',
                     'description' => 'Pesanan sedang dikirimkan ke Pembeli.',
-                    'pickup_time' => $shippingArrangedAt, // Penting untuk filter tanggal laporan
+                    'pickup_time' => $shippingArrangedAt,
                     'scrape_time' => now(),
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
 
-                // 3. Insert Items
                 foreach ($rows as $row) {
                     $sku = !empty($row['nomor_referensi_sku']) ? $row['nomor_referensi_sku'] : ($row['sku_induk'] ?? null);
                     
@@ -195,7 +202,6 @@ new class extends Component {
                     ]);
                 }
 
-                // 4. Insert Payment Details
                 OrderPaymentDetail::create([
                     'order_id' => $order->id,
                     'product_subtotal' => $rows->sum(fn($r) => $this->parseCurrency($r['total_harga_produk'] ?? 0)),
@@ -216,10 +222,21 @@ new class extends Component {
 
     private function parseCurrency($value)
     {
-        if (is_numeric($value)) return $value;
+        // PERBAIKAN: Hapus cek is_numeric agar string "138.000" tidak dianggap float 138.0
         if (empty($value)) return 0;
-        $clean = str_replace(['Rp', ' ', '.'], '', $value);
+
+        // Pastikan jadi string
+        $value = (string) $value;
+
+        // 1. Hapus 'Rp' dan spasi
+        $clean = str_replace(['Rp', ' '], '', $value);
+        
+        // 2. Hapus titik (.) sebagai pemisah ribuan (Format Indo: 138.000 -> 138000)
+        $clean = str_replace('.', '', $clean);
+        
+        // 3. Ubah koma (,) menjadi titik (.) sebagai desimal (Format Indo: 100,50 -> 100.50)
         $clean = str_replace(',', '.', $clean);
+
         return (float) $clean;
     }
 
@@ -250,6 +267,7 @@ new class extends Component {
                 
                 <form wire:submit="import" class="space-y-5">
                     
+                    {{-- Pilihan Marketplace --}}
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Marketplace</label>
                         <select wire:model="marketplace" class="w-full rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500">
@@ -258,14 +276,17 @@ new class extends Component {
                         </select>
                     </div>
 
+                    {{-- Upload File --}}
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                             File Laporan (.xlsx)
                         </label>
                         
                         <div class="flex items-center justify-center w-full">
-                            <label for="dropzone-file" class="flex flex-col items-center justify-center w-full h-36 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 dark:hover:bg-gray-800 dark:bg-gray-700 hover:bg-gray-100 transition">
-                                <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                            <label for="dropzone-file" class="flex flex-col items-center justify-center w-full h-36 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 dark:hover:bg-gray-800 dark:bg-gray-700 hover:bg-gray-100 transition relative overflow-hidden">
+                                
+                                {{-- State: Default (Belum ada file) --}}
+                                <div class="flex flex-col items-center justify-center pt-5 pb-6" wire:loading.remove wire:target="file">
                                     @if($file)
                                         <div class="text-center">
                                             <p class="mb-1 text-sm text-green-600 dark:text-green-400 font-semibold">
@@ -281,6 +302,16 @@ new class extends Component {
                                         <p class="text-xs text-gray-500 dark:text-gray-400">Format .xlsx (Excel)</p>
                                     @endif
                                 </div>
+
+                                {{-- State: Sedang Upload/Validasi File --}}
+                                <div class="absolute inset-0 flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-700 z-10" wire:loading.flex wire:target="file">
+                                    <svg class="animate-spin h-8 w-8 text-blue-500 mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    <span class="text-sm text-gray-600 dark:text-gray-300 font-medium">Mengupload & Memvalidasi...</span>
+                                </div>
+
                                 <input id="dropzone-file" type="file" wire:model="file" class="hidden" accept=".xlsx, .xls" />
                             </label>
                         </div>
@@ -299,13 +330,44 @@ new class extends Component {
                         </div>
                     </div>
 
+                    {{-- Progress Bar (Muncul saat Import berjalan) --}}
+                    <div wire:loading wire:target="import" class="w-full">
+                        <div class="flex justify-between mb-1">
+                            <span class="text-sm font-medium text-blue-700 dark:text-blue-400">Memproses Data...</span>
+                            <span class="text-sm font-medium text-blue-700 dark:text-blue-400">Mohon tunggu</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 overflow-hidden">
+                            <div class="bg-blue-600 h-2.5 rounded-full animate-progress-indeterminate"></div>
+                        </div>
+                        <style>
+                            @keyframes progress-indeterminate {
+                                0% { width: 0%; margin-left: 0%; }
+                                50% { width: 70%; margin-left: 30%; }
+                                100% { width: 0%; margin-left: 100%; }
+                            }
+                            .animate-progress-indeterminate {
+                                animation: progress-indeterminate 1.5s infinite ease-in-out;
+                            }
+                        </style>
+                    </div>
+
                     <div class="flex justify-end">
-                        <x-button type="submit" class="w-full sm:w-auto" wire:loading.attr="disabled">
-                            <span wire:loading.remove>Import Data</span>
-                            <span wire:loading>
-                                <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        {{-- Tombol Import --}}
+                        <x-button type="submit" class="w-full sm:w-auto" 
+                            wire:loading.attr="disabled" 
+                            wire:target="import, file"
+                            :disabled="!$isFileValid">
+                            
+                            {{-- State 1: Sedang Upload File --}}
+                            <span wire:loading wire:target="file">Validasi File...</span>
+
+                            {{-- State 2: Sedang Import Data (PERBAIKAN: Hapus SVG manual) --}}
+                            <span wire:loading wire:target="import">
                                 Memproses...
                             </span>
+
+                            {{-- State 3: Standby --}}
+                            <span wire:loading.remove wire:target="import, file">Import Data</span>
                         </x-button>
                     </div>
                 </form>
